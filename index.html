@@ -1,0 +1,2102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Vanish">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0d0d12">
+<meta name="description" content="Real-world hide-and-seek played in Chicago neighbourhoods. Ask questions, shrink the zone, find the hider.">
+<title>CityPlay — Vanish</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script type="module">
+// ── Firebase setup — try/catch so failures never block the game ────
+try {
+  const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js');
+  const { getDatabase, ref, set, onValue, off } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js');
+  const firebaseConfig = {
+    apiKey: "AIzaSyAhsgs6nRYp-X631qNH0xJ4k9wEgqZyTgA",
+    authDomain: "cityplay-vanish-95cb0.firebaseapp.com",
+    databaseURL: "https://cityplay-vanish-95cb0-default-rtdb.firebaseio.com",
+    projectId: "cityplay-vanish-95cb0",
+    storageBucket: "cityplay-vanish-95cb0.firebasestorage.app",
+    messagingSenderId: "1078207650778",
+    appId: "1:1078207650778:web:ae3dd98cf920d8de1e7ee3"
+  };
+  const db = getDatabase(initializeApp(firebaseConfig));
+  window._fbSet = (path, data) => set(ref(db, path), data);
+  window._fbListen = (path, cb) => {
+    const r = ref(db, path);
+    onValue(r, snap => cb(snap.val()));
+    return () => off(r);
+  };
+  console.log('Firebase ready');
+} catch(e) {
+  console.warn('Firebase unavailable:', e.message);
+  window._fbSet = null;
+  window._fbListen = null;
+}
+</script>
+<style>
+:root{--ink:#0d0d12;--ink2:#16161f;--ink3:#1e1e2a;--rim:#2c2c3e;--rim2:#3a3a52;--go:#00e87a;--go2:#00c466;--hot:#ff6b35;--cold:#38bdf8;--volt:#f0e030;--muted:#6b6b88;--sub:#9898b8;--txt:#e2e2f0;--danger:#ff4060;--purple:#a78bfa;}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;overscroll-behavior:none;}
+body{background:var(--ink);color:var(--txt);font-family:'DM Sans',sans-serif;overflow:hidden;height:100vh;width:100vw;
+  /* iOS safe area */
+  padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);
+  padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right);
+}
+#map{position:absolute;inset:0;z-index:1;}
+.leaflet-control-attribution{display:none!important;}
+.leaflet-control-zoom{margin-top:90px!important;}
+.leaflet-control-zoom a{background:var(--ink2)!important;color:var(--txt)!important;border:1px solid var(--rim)!important;}
+
+/* ═══════════════════════════════════════════════════════════════ */
+/* SCREEN: ROLE SELECT                                                */
+/* ═══════════════════════════════════════════════════════════════ */
+.screen{position:absolute;inset:0;z-index:4000;background:var(--ink);display:flex;flex-direction:column;overflow:hidden;}
+.screen-pad{padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);}
+
+#role-screen{padding:24px 22px;justify-content:center;align-items:center;text-align:center;}
+.brand{font-family:'Space Mono',monospace;font-size:14px;letter-spacing:3px;color:var(--muted);margin-bottom:8px;}
+.brand strong{color:var(--go);}
+.title{font-family:'Space Mono',monospace;font-size:42px;font-weight:700;color:var(--go);letter-spacing:2px;margin-bottom:14px;line-height:1;}
+.tagline{font-size:14px;color:var(--sub);margin-bottom:36px;line-height:1.55;max-width:340px;}
+.role-grid{display:flex;flex-direction:column;gap:12px;width:100%;max-width:380px;}
+.role-card{background:var(--ink2);border:1px solid var(--rim);border-radius:14px;padding:18px;cursor:pointer;transition:all 0.18s;text-align:left;font-family:inherit;color:inherit;}
+.role-card:hover,.role-card:active{border-color:var(--go);background:var(--ink3);}
+.role-card.seeker:hover{border-color:var(--go);}
+.role-card.hider:hover{border-color:var(--hot);}
+.role-card.join:hover{border-color:var(--cold);}
+.role-icon{font-size:24px;margin-bottom:6px;}
+.role-title{font-size:16px;font-weight:700;margin-bottom:3px;}
+.role-card.seeker .role-title{color:var(--go);}
+.role-card.hider .role-title{color:var(--hot);}
+.role-card.join .role-title{color:var(--cold);}
+.role-desc{font-size:12px;color:var(--muted);line-height:1.5;}
+.install-hint{margin-top:24px;font-size:11px;color:var(--muted);max-width:340px;line-height:1.6;padding:10px 14px;background:rgba(0,232,122,0.04);border:1px solid rgba(0,232,122,0.15);border-radius:9px;}
+.install-hint strong{color:var(--sub);}
+
+/* ═══════════════════════════════════════════════════════════════ */
+/* SCREEN: SETUP (zone selection)                                     */
+/* ═══════════════════════════════════════════════════════════════ */
+.setup-hero{padding:18px 20px 12px;border-bottom:1px solid var(--rim);flex-shrink:0;display:flex;align-items:center;gap:10px;}
+.back-btn{background:var(--ink2);border:1px solid var(--rim);border-radius:8px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;color:var(--sub);cursor:pointer;font-size:16px;flex-shrink:0;}
+.setup-hero-text{flex:1;}
+.setup-hero h1{font-family:'Space Mono',monospace;font-size:16px;color:var(--go);letter-spacing:1px;margin-bottom:2px;}
+.setup-hero p{font-size:11px;color:var(--muted);line-height:1.4;}
+.setup-body{flex:1;overflow-y:auto;padding:13px 20px;-webkit-overflow-scrolling:touch;}
+.setup-body::-webkit-scrollbar{width:3px;}
+.setup-body::-webkit-scrollbar-thumb{background:var(--rim2);border-radius:2px;}
+.slabel{font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:7px;margin-top:14px;display:block;}
+.slabel:first-child{margin-top:0;}
+.zone-info{background:var(--ink2);border:1px solid var(--rim);border-radius:10px;padding:10px 13px;font-size:12px;color:var(--sub);line-height:1.6;}
+.zone-info strong{color:var(--txt);}
+.btag{display:inline-block;background:rgba(0,232,122,0.1);color:var(--go);border:1px solid rgba(0,232,122,0.22);border-radius:4px;padding:1px 7px;font-size:10px;font-weight:600;margin:2px 2px 0 0;}
+.adj-hint{background:rgba(240,224,48,0.06);border:1px solid rgba(240,224,48,0.18);border-radius:9px;padding:9px 12px;font-size:11px;color:#c8c840;line-height:1.5;margin-bottom:9px;}
+.sel-all-btn{flex:1;padding:8px 12px;border-radius:8px;background:rgba(0,232,122,0.1);color:var(--go);border:1px solid rgba(0,232,122,0.3);font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;transition:all 0.15s;}
+.sel-all-btn:active{background:rgba(0,232,122,0.2);}
+.sel-all-btn.dim{background:var(--ink2);color:var(--muted);border-color:var(--rim);}
+.sel-all-btn.dim:active{background:var(--ink3);}
+.adj-hint strong{color:var(--volt);}
+.nb-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:6px;}
+.nb-chip{padding:9px 11px;border-radius:9px;font-size:12px;font-weight:500;background:var(--ink2);color:var(--sub);border:1px solid var(--rim);cursor:pointer;transition:all 0.18s;text-align:left;font-family:inherit;line-height:1.3;position:relative;}
+.nb-chip .nb-sub{font-size:9px;color:var(--muted);display:block;margin-top:1px;}
+.nb-chip.selected{background:rgba(0,232,122,0.10);color:var(--go);border-color:rgba(0,232,122,0.40);}
+.nb-chip.adjacent{background:rgba(0,232,122,0.04);color:var(--txt);border-color:rgba(0,232,122,0.25);}
+.nb-chip.adjacent::after{content:'+';position:absolute;top:5px;right:8px;font-size:14px;font-weight:700;color:var(--go);opacity:0.7;}
+.nb-chip.adjacent:active{background:rgba(0,232,122,0.12);}
+.nb-chip.locked{opacity:0.20;pointer-events:none;}
+.nb-chip.first-pick{background:rgba(255,255,255,0.03);color:var(--txt);border-color:var(--rim2);}
+.legend{display:flex;gap:11px;flex-wrap:wrap;margin:9px 0 7px;}
+.leg-item{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted);}
+.leg-dot{width:10px;height:10px;border-radius:3px;flex-shrink:0;}
+.leg-sel{background:rgba(0,232,122,0.2);border:1px solid rgba(0,232,122,0.4);}
+.leg-adj{background:rgba(0,232,122,0.05);border:1px solid rgba(0,232,122,0.25);}
+.leg-lck{background:var(--ink2);border:1px solid var(--rim);opacity:0.3;}
+.sel-summary{margin-top:9px;min-height:34px;}
+.sel-tags{display:flex;flex-wrap:wrap;gap:5px;}
+.sel-tag{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:7px;background:rgba(0,232,122,0.1);color:var(--go);border:1px solid rgba(0,232,122,0.28);font-size:11px;font-weight:600;}
+.sel-tag button{background:none;border:none;color:rgba(0,232,122,0.6);cursor:pointer;font-size:13px;line-height:1;padding:0;font-family:inherit;}
+.sel-empty{font-size:12px;color:var(--muted);padding:3px 0;}
+.disclosure{background:rgba(240,224,48,0.05);border:1px solid rgba(240,224,48,0.18);border-radius:10px;padding:11px 13px;margin-top:12px;}
+.disclosure p{font-size:11px;color:#c8c840;line-height:1.6;}
+.setup-footer{padding:11px 20px env(safe-area-inset-bottom);border-top:1px solid var(--rim);flex-shrink:0;display:flex;flex-direction:column;gap:8px;background:var(--ink);}
+.btn-launch{width:100%;padding:14px;border-radius:12px;background:var(--go);color:var(--ink);font-family:'Space Mono',monospace;font-size:13px;font-weight:700;letter-spacing:2px;text-transform:uppercase;border:none;cursor:pointer;transition:all 0.15s;}
+.btn-launch:disabled{opacity:0.28;cursor:not-allowed;}
+
+/* ═══════════════════════════════════════════════════════════════ */
+/* SCREEN: HIDER PAIRING                                              */
+/* ═══════════════════════════════════════════════════════════════ */
+#hider-screen{padding:24px 22px;justify-content:center;align-items:center;text-align:center;}
+.code-box{background:var(--ink2);border:1px solid var(--rim);border-radius:14px;padding:24px;margin:20px 0;max-width:380px;width:100%;}
+.code-label{font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:8px;}
+.code-display{font-family:'Space Mono',monospace;font-size:36px;font-weight:700;color:var(--hot);letter-spacing:6px;margin-bottom:14px;}
+.share-link{font-family:'Space Mono',monospace;font-size:11px;color:var(--sub);background:var(--ink);border:1px solid var(--rim);border-radius:8px;padding:10px;word-break:break-all;margin-bottom:10px;line-height:1.4;}
+.share-btns{display:flex;gap:8px;}
+.share-btn{flex:1;padding:10px;border-radius:8px;background:var(--ink3);color:var(--txt);border:1px solid var(--rim);font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;}
+.share-btn:active{background:var(--rim);}
+.gps-status{font-size:12px;color:var(--muted);margin-top:14px;line-height:1.5;}
+.gps-status.live{color:var(--go);}
+.gps-status.error{color:var(--danger);}
+
+/* ═══════════════════════════════════════════════════════════════ */
+/* SCREEN: GAME (top + bottom bars)                                   */
+/* ═══════════════════════════════════════════════════════════════ */
+.top-bar{position:absolute;top:0;left:0;right:0;z-index:1000;padding:calc(env(safe-area-inset-top) + 10px) 14px 12px;background:linear-gradient(to bottom,rgba(13,13,18,0.95) 0%,rgba(13,13,18,0.55) 80%,transparent 100%);pointer-events:none;}
+.top-bar>*{pointer-events:auto;}
+.top-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}
+.top-left{display:flex;align-items:center;gap:8px;}
+.exit-btn{background:var(--ink2);border:1px solid var(--rim);border-radius:8px;width:30px;height:30px;display:flex;align-items:center;justify-content:center;color:var(--sub);cursor:pointer;font-size:13px;flex-shrink:0;}
+.wordmark{font-family:'Space Mono',monospace;font-size:11px;color:var(--go);letter-spacing:2px;}
+.wordmark span{color:var(--muted);}
+.role-badge{display:flex;align-items:center;gap:5px;padding:3px 10px;border-radius:99px;font-size:10px;font-weight:700;letter-spacing:0.5px;}
+.role-badge.seeker{background:rgba(0,232,122,0.1);border:1px solid rgba(0,232,122,0.25);color:var(--go);}
+.role-badge.hider{background:rgba(255,107,53,0.1);border:1px solid rgba(255,107,53,0.25);color:var(--hot);}
+.pulse{width:5px;height:5px;border-radius:50%;background:currentColor;animation:blink 1.5s ease-in-out infinite;}
+@keyframes blink{0%,100%{opacity:1;}50%{opacity:0.3;}}
+.stats{display:flex;gap:12px;}
+.stat{display:flex;flex-direction:column;}
+.sl{font-size:9px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted);}
+.sv{font-family:'Space Mono',monospace;font-size:15px;font-weight:700;}
+.sv.g{color:var(--go);}
+.zone-strip{font-size:10px;color:var(--go);background:rgba(0,232,122,0.08);border:1px solid rgba(0,232,122,0.2);border-radius:6px;padding:3px 10px;margin-top:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+
+.bottom-bar{position:absolute;bottom:0;left:0;right:0;z-index:1000;padding:0 12px calc(env(safe-area-inset-bottom) + 12px);pointer-events:none;}
+.bottom-bar>*{pointer-events:auto;}
+.intel-log-btn{position:absolute;right:12px;bottom:calc(100% + 9px);background:var(--ink2);border:1px solid var(--rim);border-radius:10px;padding:6px 12px;font-family:inherit;font-size:11px;font-weight:600;color:var(--sub);cursor:pointer;display:flex;align-items:center;gap:6px;}
+.log-badge{background:var(--go);color:var(--ink);font-size:9px;font-weight:700;padding:1px 6px;border-radius:99px;}
+.intel-log{position:absolute;right:12px;bottom:calc(100% + 9px);width:min(320px, calc(100vw - 24px));max-height:280px;background:var(--ink2);border:1px solid var(--rim);border-radius:12px;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.5);display:none;flex-direction:column;}
+.intel-log.open{display:flex;}
+.log-head{display:flex;justify-content:space-between;align-items:center;padding:9px 13px;border-bottom:1px solid var(--rim);flex-shrink:0;}
+.log-head-title{font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--sub);}
+.log-x{background:none;border:none;color:var(--muted);cursor:pointer;font-size:15px;font-family:inherit;}
+.log-body{overflow-y:auto;padding:6px;-webkit-overflow-scrolling:touch;}
+.log-entry{padding:6px 9px;border-radius:7px;margin-bottom:3px;font-size:11px;line-height:1.5;color:var(--sub);background:rgba(255,255,255,0.02);}
+.lt{font-weight:700;text-transform:uppercase;font-size:9px;letter-spacing:0.5px;margin-right:4px;}
+.lt.radar{color:var(--go);}.lt.match{color:#a78bfa;}.lt.measure{color:var(--volt);}.lt.thermo{color:var(--hot);}.lt.tent{color:var(--cold);}
+
+.q-panel{background:var(--ink2);border:1px solid var(--rim);border-radius:16px;overflow:hidden;box-shadow:0 -6px 32px rgba(0,0,0,0.4);max-height:54vh;display:flex;flex-direction:column;}
+.tabs{display:flex;padding:6px 6px 0;gap:3px;overflow-x:auto;flex-shrink:0;border-bottom:1px solid rgba(255,255,255,0.04);-webkit-overflow-scrolling:touch;}
+.tabs::-webkit-scrollbar{display:none;}
+.tab{flex-shrink:0;padding:7px 13px;border-radius:8px 8px 0 0;font-size:10px;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;color:var(--muted);background:transparent;border:none;cursor:pointer;font-family:inherit;transition:all 0.15s;white-space:nowrap;}
+.tab.on{color:var(--go);background:rgba(0,232,122,0.06);}
+.qb{padding:13px 15px 16px;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+.qt{font-size:14px;color:var(--sub);line-height:1.5;margin-bottom:11px;}
+.qt em{font-style:normal;color:var(--go);font-weight:600;}
+.irow{display:flex;gap:7px;margin-bottom:9px;flex-wrap:wrap;}
+.ig{display:flex;flex-direction:column;gap:3px;flex:1;min-width:120px;}
+.il{font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);}
+.sel{background:var(--ink);border:1px solid var(--rim);border-radius:8px;padding:9px 28px 9px 11px;color:var(--txt);font-family:inherit;font-size:14px;outline:none;width:100%;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' fill='%236b6b88'%3E%3Cpath d='M5 7L1 3h8z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;}
+.sel:focus{border-color:var(--go);}
+.arow{display:flex;gap:7px;}
+.btn{flex:1;padding:11px 12px;border-radius:10px;font-family:inherit;font-size:12px;font-weight:700;letter-spacing:0.3px;text-transform:uppercase;border:none;cursor:pointer;transition:all 0.15s;}
+.btn:active{transform:scale(0.97);}
+.btn:disabled{opacity:0.28;cursor:not-allowed;}
+.btn-g{background:var(--go);color:var(--ink);}
+.btn-r{background:rgba(255,64,96,0.12);color:var(--danger);border:1px solid rgba(255,64,96,0.28);}
+.btn-hot{background:rgba(255,107,53,0.12);color:var(--hot);border:1px solid rgba(255,107,53,0.28);}
+.btn-cold{background:rgba(56,189,248,0.12);color:var(--cold);border:1px solid rgba(56,189,248,0.28);}
+.btn-out{background:rgba(255,255,255,0.04);color:var(--sub);border:1px solid var(--rim);}
+.btn-out.pinned{border-color:var(--go);color:var(--go);background:rgba(0,232,122,0.08);}
+.info-box{border-radius:9px;padding:10px 12px;margin-bottom:10px;font-size:12px;line-height:1.5;}
+.info-match{background:rgba(167,139,250,0.07);border:1px solid rgba(167,139,250,0.2);color:#a78bfa;}
+.info-match strong{color:#c4b5fd;}
+.info-match .plist{margin-top:5px;font-size:10px;color:var(--muted);line-height:1.8;}
+.nearest-tag{background:rgba(167,139,250,0.15);color:#a78bfa;padding:1px 5px;border-radius:4px;font-size:9px;font-weight:700;margin-left:3px;}
+.info-thermo{background:rgba(255,107,53,0.07);border:1px solid rgba(255,107,53,0.2);color:var(--hot);}
+.info-thermo strong{color:#ff8c5a;}
+.coord-txt{font-family:'Space Mono',monospace;font-size:10px;color:var(--sub);}
+.warn-box{background:rgba(240,224,48,0.07);border:1px solid rgba(240,224,48,0.2);border-radius:9px;padding:9px 12px;font-size:11px;color:#c8c840;margin-bottom:10px;}
+.tent-grid{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:9px;}
+.tent-btn{padding:7px 12px;border-radius:8px;font-size:11px;font-weight:600;background:rgba(56,189,248,0.07);color:var(--cold);border:1px solid rgba(56,189,248,0.2);cursor:pointer;font-family:inherit;}
+.tent-btn.on{background:rgba(56,189,248,0.2);border-color:var(--cold);}
+.no-places{font-size:11px;color:var(--muted);padding:3px 0 8px;}
+
+.seeker-dot{width:18px;height:18px;background:var(--go);border-radius:50%;border:2px solid rgba(0,232,122,0.5);box-shadow:0 0 12px var(--go),0 0 28px rgba(0,232,122,0.3);animation:seek 2s ease-in-out infinite;}
+@keyframes seek{0%,100%{box-shadow:0 0 12px var(--go),0 0 28px rgba(0,232,122,0.3);}50%{box-shadow:0 0 20px var(--go),0 0 48px rgba(0,232,122,0.4);}}
+.hider-dot{width:18px;height:18px;background:var(--hot);border-radius:50%;border:2px solid rgba(255,107,53,0.5);box-shadow:0 0 12px var(--hot),0 0 28px rgba(255,107,53,0.3);}
+.pin-a-dot{width:13px;height:13px;background:var(--hot);border-radius:50%;border:2px solid #ff8c5a;box-shadow:0 0 7px rgba(255,107,53,0.5);}
+.pin-b-dot{width:13px;height:13px;background:var(--cold);border-radius:50%;border:2px solid #7dd3fc;box-shadow:0 0 7px rgba(56,189,248,0.5);}
+
+/* Toast */
+.toast{position:absolute;top:calc(env(safe-area-inset-top) + 14px);left:50%;transform:translateX(-50%);background:var(--ink2);border:1px solid var(--rim);border-radius:10px;padding:9px 14px;font-size:12px;color:var(--txt);z-index:5000;box-shadow:0 4px 14px rgba(0,0,0,0.5);max-width:90vw;text-align:center;opacity:0;transition:opacity 0.25s;pointer-events:none;}
+.toast.show{opacity:1;}
+.toast.go{border-color:rgba(0,232,122,0.35);color:var(--go);}
+.toast.err{border-color:rgba(255,64,96,0.35);color:var(--danger);}
+
+/* GPS center button */
+.gps-btn{position:absolute;right:12px;top:calc(env(safe-area-inset-top) + 110px);z-index:900;width:38px;height:38px;background:var(--ink2);border:1px solid var(--rim);border-radius:10px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--sub);font-size:16px;}
+.gps-btn.locked{color:var(--go);border-color:rgba(0,232,122,0.4);}
+
+@media(max-width:380px){.nb-grid{grid-template-columns:repeat(auto-fill,minmax(110px,1fr));}.stats{gap:8px;}.sv{font-size:13px;}.title{font-size:36px;}}
+</style>
+</head>
+<body>
+
+<!-- ═════════════════ ROLE SELECT ═════════════════ -->
+<!-- Role screen removed — neighbourhood setup is now the first screen -->
+<div id="role-screen" class="screen" style="display:none">
+  <div class="install-hint" id="install-hint" style="display:none">
+    <strong>Install for the best experience.</strong>
+    <span id="install-instructions"></span>
+  </div>
+</div>
+
+<!-- ═════════════════ SETUP (zone selection) ═════════════════ -->
+<div id="setup-screen" class="screen" style="display:none">
+  <div class="setup-hero">
+    <div class="setup-hero-text">
+      <h1>CITYPLAY // VANISH</h1>
+      <p>Select the neighbourhoods for your game. Decide together, then choose your role.</p>
+    </div>
+  </div>
+  <div class="setup-body">
+    <span class="slabel">Game Area</span>
+    <div class="zone-info">
+      <strong>Inner Chicago</strong> — Google Maps verified.<br>
+      <span class="btag">N: Diversey</span><span class="btag">S: I-290</span><span class="btag">W: Western</span><span class="btag">E: Lake Michigan</span>
+    </div>
+    <span class="slabel" style="margin-top:14px;">Neighbourhoods</span>
+    <div style="display:flex;gap:8px;margin-bottom:9px;">
+      <button class="sel-all-btn" onclick="selectAll()">Select All</button>
+      <button class="sel-all-btn dim" onclick="deselectAll()">Deselect All</button>
+    </div>
+    <div class="adj-hint" id="adj-hint"><strong>Pick any to start.</strong> After your first pick, only adjacent neighbourhoods will be available. Or tap Select All.</div>
+    <div class="legend">
+      <div class="leg-item"><div class="leg-dot leg-sel"></div>Selected</div>
+      <div class="leg-item"><div class="leg-dot leg-adj"></div>Available</div>
+      <div class="leg-item"><div class="leg-dot leg-lck"></div>Locked</div>
+    </div>
+    <div class="nb-grid" id="nb-grid"></div>
+    <div class="sel-summary" id="sel-summary"><div class="sel-empty">No neighbourhoods selected</div></div>
+    <div class="disclosure">
+      <p><strong style="color:var(--volt)">Boundaries:</strong> We use Google Maps as ground truth. Open Google Maps, search the neighbourhood name — what you see is what we use.</p>
+      <p style="margin-top:8px;font-size:11px;color:#c8c840;">Joining as the hider? <button onclick="promptJoinCode()" style="background:none;border:none;color:var(--cold);cursor:pointer;font-size:11px;padding:0;text-decoration:underline;font-family:inherit;">Enter your game code here</button></p>
+    </div>
+  </div>
+  <div class="setup-footer">
+    <!-- Game code — generated when neighbourhoods are selected -->
+    <div id="game-code-section" style="display:none;margin-bottom:10px;">
+      <div style="background:var(--ink2);border:1px solid var(--rim);border-radius:10px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;">
+        <div>
+          <div style="font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:3px;">Game Code — share with hider</div>
+          <div style="font-family:'Space Mono',monospace;font-size:22px;font-weight:700;color:var(--hot);letter-spacing:4px;" id="setup-code-display">——</div>
+        </div>
+        <button onclick="shareSetupLink()" style="background:var(--ink3);border:1px solid var(--rim);border-radius:8px;padding:8px 14px;font-family:inherit;font-size:12px;font-weight:600;color:var(--sub);cursor:pointer;flex-shrink:0;">📤 Share</button>
+      </div>
+    </div>
+    <!-- Role buttons -->
+    <div style="gap:8px;display:none;" id="role-btn-row">
+      <button class="btn-launch" id="btn-seeker" onclick="launchAsSeeker()" disabled
+        style="background:var(--go);flex:1;">🔍 I'M THE SEEKER</button>
+      <button class="btn-launch" id="btn-hider-join" onclick="launchAsHiderFromSetup()" disabled
+        style="background:var(--hot);flex:1;">👁 I'M THE HIDER</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═════════════════ HIDER PAIRING ═════════════════ -->
+<div id="hider-screen" class="screen" style="display:none;padding:0;">
+  <!-- Hider sees a full-screen map with their zone boundaries -->
+  <!-- The ready button floats at the bottom -->
+  <div style="position:absolute;top:calc(env(safe-area-inset-top)+12px);left:0;right:0;z-index:100;padding:0 14px;pointer-events:none;">
+    <div style="background:rgba(13,13,18,0.9);border:1px solid var(--hot);border-radius:12px;padding:10px 14px;backdrop-filter:blur(8px);">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px;">
+        <div style="font-family:'Space Mono',monospace;font-size:11px;color:var(--hot);letter-spacing:2px;">👁 YOU ARE THE HIDER</div>
+        <div id="seeker-last-seen" style="font-size:10px;color:var(--muted);display:none;">
+          <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--muted);margin-right:4px;vertical-align:middle;" id="seeker-dot-status"></span>
+          <span id="seeker-last-seen-text">Seeker not yet live</span>
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--sub);">Find a spot within the <strong style="color:var(--txt);" id="hider-zone-name">selected zone</strong>. Tap Ready when hidden.</div>
+    </div>
+  </div>
+  <div id="hider-map" style="position:absolute;inset:0;z-index:1;"></div>
+  <div style="position:absolute;bottom:0;left:0;right:0;z-index:100;padding:12px 16px calc(env(safe-area-inset-bottom)+12px);">
+    <button onclick="hiderReady()" style="width:100%;padding:16px;border-radius:14px;background:var(--hot);color:var(--ink);font-family:'Space Mono',monospace;font-size:14px;font-weight:700;letter-spacing:2px;text-transform:uppercase;border:none;cursor:pointer;">
+      ✓ I'M READY — START THE HUNT
+    </button>
+  </div>
+</div>
+
+<!-- ═════════════════ GAME MAP ═════════════════ -->
+<div id="map"></div>
+
+<button class="gps-btn" id="gps-btn" onclick="centerOnMe()" style="display:none">📍</button>
+
+<!-- Top bar (game) -->
+<div class="top-bar" id="top-bar" style="display:none">
+  <div class="top-row">
+    <div class="top-left">
+      <button class="exit-btn" onclick="exitGame()" title="Exit">✕</button>
+      <button class="exit-btn" id="rejoin-btn" onclick="copyRejoinLink()" title="Get rejoin link" style="display:none;font-size:10px;width:auto;padding:0 8px;">🔗</button>
+      <div class="wordmark">CITY<span>PLAY</span></div>
+    </div>
+    <div class="role-badge" id="role-badge"></div>
+  </div>
+  <div class="stats" id="game-stats">
+    <div class="stat"><div class="sl">Questions</div><div class="sv" id="s-q">0</div></div>
+    <div class="stat"><div class="sl">Zone</div><div class="sv g" id="s-z">100%</div></div>
+    <div class="stat"><div class="sl">Time</div><div class="sv" id="s-t">0:00</div></div>
+  </div>
+  <div class="zone-strip" id="zone-strip"></div>
+</div>
+
+<!-- Bottom bar (game — seeker only) -->
+<div class="bottom-bar" id="bottom-bar" style="display:none">
+  <button class="intel-log-btn" id="log-btn" onclick="toggleLog()">Intel Log <span class="log-badge" id="log-badge">0</span></button>
+  <div class="intel-log" id="intel-log">
+    <div class="log-head"><div class="log-head-title">Intel Log</div><button class="log-x" onclick="toggleLog()">✕</button></div>
+    <div class="log-body" id="log-body"></div>
+  </div>
+  <div class="q-panel" id="q-panel">
+    <div class="tabs">
+      <button class="tab on" data-t="radar" onclick="switchTab('radar')">Radar</button>
+      <button class="tab" data-t="match" onclick="switchTab('match')">Matching</button>
+      <button class="tab" data-t="measure" onclick="switchTab('measure')">Measuring</button>
+      <button class="tab" data-t="thermo" onclick="switchTab('thermo')">Thermo</button>
+      <button class="tab" data-t="tent" onclick="switchTab('tent')">Tentacles</button>
+    </div>
+    <div class="qb" id="q-radar">
+      <div class="qt">"Are you within <em>___</em> of me?"</div>
+      <div class="irow"><div class="ig"><div class="il">Distance</div>
+        <select class="sel" id="r-dist">
+          <option value="0.25">¼ mile</option><option value="0.5">½ mile</option>
+          <option value="1" selected>1 mile</option><option value="3">3 miles</option>
+          <option value="5">5 miles</option><option value="10">10 miles</option>
+        </select>
+      </div></div>
+      <div class="arow"><button class="btn btn-g" onclick="doRadar(true)">Yes — Inside</button><button class="btn btn-r" onclick="doRadar(false)">No — Outside</button></div>
+    </div>
+    <div class="qb" id="q-match" style="display:none">
+      <div class="qt">"Is your nearest <em>___</em> the same as mine?"</div>
+      <div class="irow"><div class="ig"><div class="il">Place Type</div>
+        <select class="sel" id="m-type" onchange="updateMatchInfo()">
+          <option value="park">Park</option><option value="hospital">Hospital</option>
+          <option value="library">Library</option><option value="museum">Museum</option>
+          <option value="train">CTA L Station</option><option value="airport">Airport</option>
+          <option value="cemetery">Cemetery</option><option value="cinema">Movie Theater</option>
+        </select>
+      </div></div>
+      <div id="match-info"></div>
+      <div class="arow"><button class="btn btn-g" onclick="doMatch(true)">Yes — Same</button><button class="btn btn-r" onclick="doMatch(false)">No — Different</button></div>
+    </div>
+    <div class="qb" id="q-measure" style="display:none">
+      <div class="qt">"Compared to me, are you <em>closer to</em> or <em>further from</em> <em>___</em>?"</div>
+      <div class="irow"><div class="ig"><div class="il">Landmark</div>
+        <select class="sel" id="lm-sel">
+          <option value="41.8789,-87.6359">Willis Tower</option>
+          <option value="41.8917,-87.6086">Navy Pier</option>
+          <option value="41.8827,-87.6233">Millennium Park</option>
+          <option value="41.8668,-87.6070">Soldier Field</option>
+          <option value="41.9484,-87.6553">Wrigley Field</option>
+          <option value="41.8807,-87.6742">United Center</option>
+          <option value="41.9795,-87.9001">O'Hare Airport</option>
+          <option value="41.7868,-87.7522">Midway Airport</option>
+        </select>
+      </div></div>
+      <div class="arow"><button class="btn btn-g" onclick="doMeasure('closer')">Closer</button><button class="btn btn-r" onclick="doMeasure('further')">Further</button></div>
+    </div>
+    <div class="qb" id="q-thermo" style="display:none">
+      <div class="qt">"I traveled from <em>Point A</em> to <em>Point B</em>. Am I <em>hotter</em> or <em>colder</em>?"</div>
+      <div class="irow">
+        <button class="btn btn-out" id="pin-a-btn" onclick="startPin('A')">📍 Pin A — Start</button>
+        <button class="btn btn-out" id="pin-b-btn" onclick="startPin('B')">📍 Pin B — Now</button>
+      </div>
+      <div id="thermo-info"></div>
+      <div class="arow"><button class="btn btn-hot" id="btn-hot" onclick="doThermo('hotter')" disabled>🔥 Hotter</button><button class="btn btn-cold" id="btn-cold" onclick="doThermo('colder')" disabled>🧊 Colder</button></div>
+    </div>
+    <div class="qb" id="q-tent" style="display:none">
+      <div class="qt">"Of all the <em>___</em> within 1 mile of me, which are you closest to?"</div>
+      <div class="irow"><div class="ig"><div class="il">Place Type</div>
+        <select class="sel" id="t-type" onchange="updateTentPlaces()">
+          <option value="museum">Museums</option><option value="library">Libraries</option>
+          <option value="cinema">Movie Theaters</option><option value="hospital">Hospitals</option>
+          <option value="park">Parks</option><option value="train">CTA L Stations</option>
+        </select>
+      </div></div>
+      <div class="il" style="margin-bottom:6px;margin-top:2px;">WITHIN 1 MILE — tap the hider's answer</div>
+      <div class="tent-grid" id="tent-grid"></div>
+      <div class="arow"><button class="btn btn-g" onclick="doTentacles()">Apply Intel</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- Hider game UI (much simpler — just shows their position + game status) -->
+<div class="bottom-bar" id="hider-game-bar" style="display:none">
+  <div class="q-panel">
+    <div class="qb">
+      <div class="qt" style="font-size:13px;color:var(--sub);">
+        <strong style="color:var(--hot);">You're hiding.</strong> Stay in your spot — the seekers can see your live position.
+      </div>
+      <div class="info-box info-thermo" id="hider-info">
+        Game code: <strong id="hider-code-inline">—</strong>
+      </div>
+      <div class="arow">
+        <button class="btn btn-r" onclick="exitGame()">END GAME</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════
+// PWA: register service worker
+// ═══════════════════════════════════════════════════════════════════
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('service-worker.js').catch(err => console.warn('SW registration failed:', err));
+  });
+}
+
+// Detect iOS to show Add-to-Home-Screen hint
+(function showInstallHint(){
+  const ua = navigator.userAgent;
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+  if (isStandalone) return;
+  const isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+  const isAndroid = /Android/.test(ua);
+  const hint = document.getElementById('install-hint');
+  const instr = document.getElementById('install-instructions');
+  if (isIOS) {
+    instr.textContent = ' On iPhone: tap the Share button, then "Add to Home Screen" for full-screen play.';
+    hint.style.display = 'block';
+  } else if (isAndroid) {
+    instr.textContent = ' On Android: tap the menu (⋮), then "Install app" for full-screen play.';
+    hint.style.display = 'block';
+  }
+})();
+
+// ═══════════════════════════════════════════════════════════════════
+// NEIGHBOURHOOD POLYGONS — Google Maps verified
+// (See previous version for full source attribution)
+// ═══════════════════════════════════════════════════════════════════
+
+const POLY = {
+  'armour-square':[[41.84713,-87.6292],[41.84556,-87.62917],[41.84554,-87.62997],[41.83106,-87.62957],[41.83097,-87.629],[41.82768,-87.62892],[41.82733,-87.62909],[41.82368,-87.62897],[41.82361,-87.63396],[41.82521,-87.63606],[41.82723,-87.6362],[41.82723,-87.6364],[41.83415,-87.63658],[41.83453,-87.63653],[41.83453,-87.63589],[41.83636,-87.63593],[41.83635,-87.63643],[41.84364,-87.63651],[41.84362,-87.63829],[41.84618,-87.63836],[41.84637,-87.63953],[41.8463,-87.6416],[41.84711,-87.64185],[41.84729,-87.64167],[41.84748,-87.63119]],
+  'boystown':[[41.93999,-87.64878],[41.93998,-87.64927],[41.9512,-87.64962],[41.94273,-87.64448],[41.94004,-87.6444],[41.93999,-87.64878]],
+  'bridgeport':[[41.84618,-87.63836],[41.84362,-87.63829],[41.84364,-87.63651],[41.83635,-87.63643],[41.83636,-87.63593],[41.83453,-87.63589],[41.83453,-87.63653],[41.83415,-87.63658],[41.82723,-87.6364],[41.82723,-87.6362],[41.82521,-87.63606],[41.82361,-87.63396],[41.82331,-87.65611],[41.82404,-87.65714],[41.82823,-87.65756],[41.8312,-87.65743],[41.83437,-87.66035],[41.83486,-87.66129],[41.83682,-87.66308],[41.83781,-87.66344],[41.83956,-87.66454],[41.84066,-87.66454],[41.84162,-87.66497],[41.8428,-87.66431],[41.84418,-87.66382],[41.84584,-87.66078],[41.84572,-87.66072],[41.84726,-87.6586],[41.84717,-87.6575],[41.84831,-87.651],[41.8484,-87.64964],[41.84942,-87.64527],[41.84951,-87.644],[41.84852,-87.64323],[41.84893,-87.64225],[41.84812,-87.64163],[41.84811,-87.64243],[41.84728,-87.64173],[41.84711,-87.64185],[41.8463,-87.6416],[41.84637,-87.63953]],
+  'bucktown':[[41.92846,-87.67971],[41.92759,-87.67652],[41.92666,-87.67494],[41.92614,-87.67455],[41.92484,-87.67446],[41.92439,-87.67426],[41.92281,-87.67216],[41.92241,-87.67111],[41.92239,-87.66928],[41.92203,-87.6681],[41.92088,-87.66734],[41.9177,-87.66453],[41.91589,-87.6639],[41.91562,-87.66363],[41.91457,-87.66594],[41.91428,-87.66744],[41.91417,-87.67755],[41.91472,-87.67756],[41.91462,-87.68245],[41.91358,-87.68242],[41.91406,-87.68315],[41.91399,-87.68732],[41.9361,-87.68799],[41.93403,-87.68597],[41.93369,-87.68506],[41.9334,-87.68343],[41.93223,-87.68284],[41.9314,-87.68215],[41.93064,-87.6808]],
+  'chinatown':[[41.84748,-87.63119],[41.84728,-87.64173],[41.84811,-87.64243],[41.84812,-87.64163],[41.84893,-87.64225],[41.84852,-87.64323],[41.84951,-87.644],[41.85002,-87.64264],[41.85078,-87.64192],[41.85428,-87.63939],[41.85533,-87.63748],[41.85629,-87.63616],[41.85694,-87.63549],[41.85772,-87.63516],[41.8577,-87.63023],[41.85288,-87.63006],[41.85288,-87.62935],[41.84713,-87.62921]],
+  'douglas':[[41.84527,-87.60941],[41.84336,-87.60877],[41.84231,-87.60802],[41.84103,-87.60785],[41.84056,-87.60753],[41.84067,-87.60698],[41.84056,-87.60668],[41.8405,-87.6075],[41.83965,-87.60721],[41.83921,-87.60658],[41.83864,-87.60616],[41.83896,-87.60471],[41.83983,-87.60419],[41.83955,-87.6042],[41.83888,-87.60467],[41.83855,-87.60613],[41.83729,-87.60607],[41.83612,-87.60566],[41.83499,-87.60456],[41.83481,-87.60454],[41.83442,-87.60503],[41.8338,-87.60487],[41.8332,-87.60435],[41.83297,-87.60335],[41.83273,-87.60301],[41.83233,-87.6027],[41.83137,-87.60271],[41.83119,-87.61063],[41.82389,-87.61262],[41.82368,-87.62897],[41.82733,-87.62909],[41.82768,-87.62892],[41.83097,-87.629],[41.83106,-87.62957],[41.84554,-87.62997],[41.84573,-87.61784],[41.84564,-87.61657],[41.84509,-87.61601],[41.84527,-87.61141]],
+  'east-village':[[41.89591,-87.67705],[41.90319,-87.67726],[41.90335,-87.6675],[41.89607,-87.66729]],
+  'gold-coast':[[41.91075,-87.62472],[41.91027,-87.6251],[41.90909,-87.62509],[41.90753,-87.62481],[41.90408,-87.62357],[41.90405,-87.62372],[41.90316,-87.62256],[41.90234,-87.62191],[41.90205,-87.62187],[41.90156,-87.6199],[41.90097,-87.61913],[41.90076,-87.62751],[41.90326,-87.62866],[41.90394,-87.62868],[41.9039,-87.63145],[41.91118,-87.63168],[41.91125,-87.62712],[41.91167,-87.62657],[41.91137,-87.6264],[41.91157,-87.62446],[41.91142,-87.62466]],
+  'grant-park':[[41.88083,-87.62434],[41.88092,-87.61749],[41.86997,-87.61722],[41.86906,-87.61758],[41.86759,-87.61889],[41.86746,-87.62413]],
+  'greektown':[[41.87541,-87.64581],[41.87537,-87.64833],[41.88176,-87.64853],[41.88179,-87.646],[41.87542,-87.64558]],
+  'hyde-park':[[41.79065,-87.5867],[41.78614,-87.5866],[41.78587,-87.60604],[41.80225,-87.60641],[41.80253,-87.58405],[41.80243,-87.58165],[41.80263,-87.58105],[41.80253,-87.58038],[41.80078,-87.58047],[41.79956,-87.58026],[41.79844,-87.57979],[41.79837,-87.57994],[41.79701,-87.57821],[41.79686,-87.57755],[41.79705,-87.57651],[41.79698,-87.57588],[41.79661,-87.57527],[41.79624,-87.57516],[41.79544,-87.57544],[41.79507,-87.57622],[41.79504,-87.57739],[41.79473,-87.5783],[41.7942,-87.57901],[41.79349,-87.5793],[41.79338,-87.58664]],
+  'jackson-park':[[41.79339,-87.5793],[41.79257,-87.57932],[41.79204,-87.57963],[41.79171,-87.57945],[41.79002,-87.57835],[41.78857,-87.57632],[41.7883,-87.57776],[41.78815,-87.57764],[41.78818,-87.57715],[41.78739,-87.57734],[41.78631,-87.5772],[41.7836,-87.57605],[41.78183,-87.5723],[41.78129,-87.56976],[41.78161,-87.5684],[41.78462,-87.56764],[41.7846,-87.56753],[41.78154,-87.56831],[41.78087,-87.57118],[41.78025,-87.57308],[41.77982,-87.57295],[41.77953,-87.57411],[41.77911,-87.57473],[41.77778,-87.57529],[41.77701,-87.57519],[41.77615,-87.57461],[41.77599,-87.5747],[41.77593,-87.57508],[41.77579,-87.57504],[41.77538,-87.57331],[41.77559,-87.57322],[41.77588,-87.57194],[41.77666,-87.57177],[41.77734,-87.57231],[41.77733,-87.57265],[41.77831,-87.57336],[41.77914,-87.57326],[41.77931,-87.57248],[41.77918,-87.57217],[41.77858,-87.57182],[41.77705,-87.56997],[41.7764,-87.56881],[41.77397,-87.56683],[41.77379,-87.56645],[41.77356,-87.56681],[41.77334,-87.5863],[41.79065,-87.5867],[41.79338,-87.58664]],
+  'kenwood':[[41.81629,-87.59199],[41.81592,-87.59142],[41.815,-87.59089],[41.81465,-87.59046],[41.81438,-87.59035],[41.81435,-87.59052],[41.81352,-87.59004],[41.81282,-87.58913],[41.81219,-87.58863],[41.81184,-87.58734],[41.81117,-87.58693],[41.81061,-87.58704],[41.81003,-87.58689],[41.8093,-87.58648],[41.8092,-87.58627],[41.8079,-87.58567],[41.80699,-87.58495],[41.80429,-87.58124],[41.80393,-87.58011],[41.80359,-87.58002],[41.80293,-87.58045],[41.80287,-87.58029],[41.80253,-87.58038],[41.80263,-87.58105],[41.80243,-87.58165],[41.80253,-87.58405],[41.80225,-87.60641],[41.81681,-87.60671],[41.81693,-87.59215]],
+  'lake-view':[[41.94728,-87.66402],[41.94707,-87.66402],[41.9472,-87.65652],[41.94447,-87.65424],[41.95449,-87.65454],[41.9548,-87.64102],[41.94943,-87.63864],[41.94743,-87.63755],[41.94576,-87.63625],[41.94274,-87.63316],[41.9424,-87.633],[41.94221,-87.63315],[41.94218,-87.63364],[41.94232,-87.63384],[41.94291,-87.63406],[41.94318,-87.63443],[41.9432,-87.63478],[41.9429,-87.63548],[41.94298,-87.63592],[41.94324,-87.63618],[41.9449,-87.63696],[41.94505,-87.63682],[41.94579,-87.63736],[41.94631,-87.63889],[41.9464,-87.64002],[41.94652,-87.64026],[41.94672,-87.6401],[41.94672,-87.6403],[41.94755,-87.64103],[41.94798,-87.64179],[41.94801,-87.64204],[41.94785,-87.64213],[41.94595,-87.64005],[41.94538,-87.64012],[41.94519,-87.64045],[41.94483,-87.64046],[41.9436,-87.63959],[41.94303,-87.63878],[41.94251,-87.63851],[41.94121,-87.63831],[41.93983,-87.63712],[41.94026,-87.63695],[41.94023,-87.63673],[41.93976,-87.63682],[41.93978,-87.63584],[41.93961,-87.6358],[41.93971,-87.6355],[41.94015,-87.63499],[41.94069,-87.63478],[41.94071,-87.63517],[41.94086,-87.63515],[41.94074,-87.63476],[41.94141,-87.6347],[41.94159,-87.63445],[41.94186,-87.63445],[41.9415,-87.6339],[41.94038,-87.63386],[41.93945,-87.63358],[41.93808,-87.63299],[41.93724,-87.63229],[41.93718,-87.63243],[41.93584,-87.6321],[41.93481,-87.63145],[41.93367,-87.63044],[41.93333,-87.63047],[41.93306,-87.63071],[41.93253,-87.63066],[41.93306,-87.63074],[41.93297,-87.63138],[41.93269,-87.6314],[41.93258,-87.6316],[41.9326,-87.63251],[41.93293,-87.63282],[41.93301,-87.63411],[41.9328,-87.63472],[41.93293,-87.63809],[41.93234,-87.67336],[41.96153,-87.67398],[41.96163,-87.66595],[41.95803,-87.66451],[41.95438,-87.66225],[41.95435,-87.66422]],
+  'lincoln-park':[[41.91835,-87.63672],[41.91818,-87.64851],[41.91092,-87.64827],[41.91078,-87.65686],[41.91381,-87.65786],[41.91471,-87.65865],[41.91618,-87.66113],[41.9155,-87.66298],[41.91563,-87.66371],[41.9177,-87.66453],[41.92088,-87.66734],[41.92203,-87.6681],[41.92239,-87.66928],[41.92241,-87.67111],[41.92281,-87.67216],[41.92439,-87.67426],[41.92484,-87.67446],[41.92614,-87.67455],[41.92666,-87.67494],[41.92759,-87.67652],[41.92846,-87.67971],[41.93064,-87.6808],[41.9314,-87.68215],[41.93223,-87.68284],[41.93256,-87.65871],[41.92166,-87.65833],[41.92166,-87.65803],[41.92182,-87.64863],[41.93272,-87.64901],[41.93293,-87.63809],[41.9328,-87.63472],[41.933,-87.63396],[41.93293,-87.63282],[41.9326,-87.63251],[41.93258,-87.63182],[41.93244,-87.63182],[41.93239,-87.63125],[41.93259,-87.63107],[41.93239,-87.63124],[41.93217,-87.63085],[41.93178,-87.63067],[41.93008,-87.63101],[41.92901,-87.63083],[41.92808,-87.6304],[41.928,-87.63061],[41.92708,-87.62979],[41.92662,-87.6296],[41.92615,-87.62966],[41.92616,-87.62988],[41.92578,-87.63027],[41.92378,-87.63001],[41.92348,-87.6299],[41.92275,-87.629],[41.92309,-87.62835],[41.92243,-87.62949],[41.92103,-87.62854],[41.92137,-87.6277],[41.92073,-87.62892],[41.9195,-87.62796],[41.91977,-87.62733],[41.91924,-87.62844],[41.9188,-87.62815],[41.918,-87.62735],[41.91825,-87.6268],[41.9176,-87.62791],[41.91644,-87.62671],[41.91684,-87.62609],[41.91626,-87.62679],[41.91472,-87.62487],[41.91381,-87.62328],[41.91353,-87.62189],[41.91379,-87.62059],[41.91338,-87.62057],[41.91319,-87.62075],[41.91272,-87.62284],[41.91157,-87.62446],[41.91137,-87.6264],[41.91167,-87.62657],[41.91125,-87.62712],[41.91118,-87.63168],[41.91847,-87.63612]],
+  'little-italy-uic':[[41.86752,-87.64479],[41.85995,-87.64447],[41.85955,-87.67427],[41.85842,-87.68581],[41.85937,-87.68583],[41.85934,-87.68817],[41.86306,-87.68818],[41.86656,-87.69075],[41.86657,-87.69047],[41.86729,-87.69095],[41.86795,-87.69111],[41.87526,-87.69132],[41.87558,-87.65987],[41.87529,-87.65129],[41.87542,-87.64559],[41.87371,-87.64566]],
+  'logan-square':[[41.91399,-87.68732],[41.91386,-87.69099],[41.91401,-87.69735],[41.91378,-87.70668],[41.91366,-87.70702],[41.91355,-87.71625],[41.91364,-87.72235],[41.91538,-87.72314],[41.91537,-87.72406],[41.9172,-87.72422],[41.9172,-87.72391],[41.91902,-87.72488],[41.91899,-87.72661],[41.92188,-87.7267],[41.92265,-87.72708],[41.92265,-87.72644],[41.92331,-87.72674],[41.92448,-87.72677],[41.92447,-87.7277],[41.93173,-87.73146],[41.93218,-87.68788]],
+  'loop':[[41.88847,-87.6052],[41.88835,-87.60513],[41.88831,-87.60246],[41.88818,-87.60781],[41.88797,-87.60985],[41.88408,-87.60999],[41.88406,-87.61274],[41.88339,-87.61288],[41.88282,-87.61357],[41.88254,-87.61446],[41.88244,-87.61579],[41.8821,-87.61635],[41.88141,-87.6165],[41.88142,-87.61575],[41.88057,-87.61572],[41.88056,-87.61648],[41.87567,-87.61618],[41.8689,-87.61621],[41.8683,-87.61535],[41.86799,-87.61854],[41.86918,-87.61747],[41.86997,-87.61722],[41.88187,-87.61743],[41.88284,-87.61675],[41.8838,-87.61494],[41.88438,-87.61436],[41.88447,-87.62445],[41.86746,-87.62413],[41.86741,-87.62742],[41.87455,-87.62761],[41.87453,-87.63028],[41.87452,-87.63068],[41.86737,-87.63044],[41.86731,-87.63473],[41.87061,-87.63518],[41.87397,-87.63587],[41.8752,-87.63629],[41.87603,-87.63707],[41.87669,-87.63743],[41.87977,-87.6382],[41.88102,-87.63829],[41.88319,-87.63814],[41.88572,-87.63773],[41.88642,-87.63744],[41.88745,-87.63562],[41.88751,-87.62762],[41.88891,-87.62509],[41.88884,-87.62271],[41.88831,-87.61801],[41.88841,-87.61397]],
+  'lower-west-side':[[41.85428,-87.63939],[41.85069,-87.642],[41.85002,-87.64264],[41.84965,-87.64364],[41.84921,-87.6468],[41.8484,-87.64964],[41.84831,-87.651],[41.84717,-87.6575],[41.84726,-87.6586],[41.84572,-87.66072],[41.84584,-87.66078],[41.84441,-87.66361],[41.8441,-87.66389],[41.8428,-87.66431],[41.84162,-87.66497],[41.84066,-87.66454],[41.83956,-87.66454],[41.83907,-87.66429],[41.83772,-87.66683],[41.83732,-87.66824],[41.83716,-87.66957],[41.83714,-87.67056],[41.83735,-87.67056],[41.83713,-87.67945],[41.83687,-87.6808],[41.8348,-87.6874],[41.84479,-87.68756],[41.84837,-87.68779],[41.85934,-87.68807],[41.85937,-87.68583],[41.85842,-87.68581],[41.85955,-87.67427],[41.86002,-87.63901],[41.85767,-87.63894],[41.85772,-87.63516],[41.85694,-87.63549],[41.85533,-87.63748]],
+  'magnificent-mile':[[41.88888,-87.624],[41.8889,-87.62476],[41.89001,-87.62449],[41.89649,-87.62465],[41.89789,-87.62445],[41.90081,-87.6245],[41.90083,-87.62375],[41.89775,-87.62374],[41.89653,-87.62392],[41.88985,-87.62373]],
+  'mckinley-park':[[41.82296,-87.68608],[41.82435,-87.68614],[41.82489,-87.68667],[41.82523,-87.68611],[41.82665,-87.68686],[41.82662,-87.68736],[41.83469,-87.68745],[41.83671,-87.68132],[41.83713,-87.67945],[41.83735,-87.67056],[41.83714,-87.67056],[41.83714,-87.67004],[41.83732,-87.66824],[41.83786,-87.66651],[41.83907,-87.66429],[41.83781,-87.66344],[41.83682,-87.66308],[41.83614,-87.66249],[41.83486,-87.66129],[41.83437,-87.66035],[41.8312,-87.65743],[41.82823,-87.65756],[41.82404,-87.65714],[41.82331,-87.65611]],
+  'millenium-park':[[41.88447,-87.62445],[41.88438,-87.61436],[41.8838,-87.61494],[41.88299,-87.61653],[41.88256,-87.61704],[41.88187,-87.61743],[41.88092,-87.61749],[41.88083,-87.62434]],
+  'museum-campus':[[41.86686,-87.60775],[41.86717,-87.60724],[41.86724,-87.60668],[41.86698,-87.60594],[41.86642,-87.60561],[41.86606,-87.60568],[41.86568,-87.60605],[41.86479,-87.60605],[41.86479,-87.60629],[41.8652,-87.60656],[41.86516,-87.60693],[41.86475,-87.60741],[41.86427,-87.60758],[41.86238,-87.60696],[41.86201,-87.60602],[41.86008,-87.60596],[41.85996,-87.60707],[41.85336,-87.60651],[41.85317,-87.60892],[41.85335,-87.60953],[41.85377,-87.6099],[41.85679,-87.60933],[41.85769,-87.60994],[41.85863,-87.60988],[41.85928,-87.61048],[41.85987,-87.61036],[41.86011,-87.61044],[41.86021,-87.61067],[41.86065,-87.61067],[41.86085,-87.61035],[41.8614,-87.61036],[41.86215,-87.60988],[41.86351,-87.60961],[41.86463,-87.60996],[41.86532,-87.61045],[41.86586,-87.61048],[41.86584,-87.61267],[41.86528,-87.61265],[41.86431,-87.61319],[41.86344,-87.61343],[41.86249,-87.61331],[41.86137,-87.61256],[41.86082,-87.61255],[41.86063,-87.6122],[41.86035,-87.61239],[41.86035,-87.61215],[41.85999,-87.61244],[41.85927,-87.6122],[41.85858,-87.61219],[41.85834,-87.61274],[41.85763,-87.61304],[41.85711,-87.61307],[41.85633,-87.61284],[41.85584,-87.61248],[41.85493,-87.6112],[41.85312,-87.61074],[41.85091,-87.60922],[41.8487,-87.60954],[41.848,-87.60948],[41.84655,-87.60852],[41.84614,-87.60841],[41.84567,-87.6085],[41.84469,-87.60914],[41.84527,-87.60941],[41.84527,-87.61141],[41.85125,-87.61382],[41.86264,-87.61884],[41.86725,-87.62041],[41.86751,-87.6204],[41.8675,-87.61896],[41.86799,-87.61854],[41.86848,-87.61321],[41.86827,-87.61271],[41.86784,-87.61237],[41.86747,-87.61235],[41.86675,-87.61269]],
+  'near-south-side':[[41.84713,-87.6292],[41.85288,-87.62935],[41.85288,-87.63006],[41.85778,-87.63023],[41.85772,-87.63516],[41.8582,-87.63509],[41.85938,-87.63451],[41.86731,-87.63473],[41.86751,-87.6204],[41.86291,-87.61895],[41.84527,-87.61141],[41.84509,-87.61601],[41.84564,-87.61657],[41.84573,-87.61784],[41.84556,-87.62917]],
+  'north-center':[[41.93369,-87.68506],[41.93403,-87.68597],[41.93601,-87.68782],[41.93646,-87.68856],[41.93662,-87.68999],[41.9368,-87.69029],[41.93877,-87.69147],[41.93952,-87.69279],[41.94026,-87.69363],[41.9431,-87.6954],[41.94997,-87.69686],[41.95039,-87.69679],[41.95218,-87.69578],[41.95392,-87.69455],[41.95703,-87.69427],[41.95706,-87.69438],[41.95785,-87.69434],[41.96127,-87.69475],[41.96153,-87.67398],[41.93236,-87.67336],[41.93223,-87.68284],[41.9334,-87.68343]],
+  'oakland':[[41.81681,-87.60671],[41.82317,-87.60686],[41.82331,-87.60644],[41.82396,-87.60687],[41.82389,-87.61262],[41.83119,-87.61063],[41.83137,-87.60271],[41.83069,-87.60239],[41.82802,-87.60006],[41.82634,-87.59775],[41.82564,-87.59748],[41.82433,-87.59768],[41.82262,-87.59727],[41.82114,-87.59606],[41.82032,-87.59565],[41.81981,-87.59512],[41.8197,-87.59462],[41.81828,-87.59256],[41.81768,-87.59219],[41.81693,-87.59215]],
+  'old-town':[[41.90377,-87.63964],[41.9109,-87.6495],[41.91092,-87.64827],[41.91818,-87.64851],[41.91835,-87.63672],[41.91847,-87.63612],[41.91123,-87.63171],[41.9039,-87.63145]],
+  'printers-row':[[41.87437,-87.62761],[41.86741,-87.62742],[41.86737,-87.63044],[41.87452,-87.63068],[41.87455,-87.62761]],
+  'river-north':[[41.88743,-87.6358],[41.88623,-87.63759],[41.88673,-87.63839],[41.88716,-87.63877],[41.88923,-87.63944],[41.89064,-87.64067],[41.89205,-87.64157],[41.89287,-87.64245],[41.89354,-87.64355],[41.89412,-87.64406],[41.89664,-87.64423],[41.89724,-87.64443],[41.89769,-87.64489],[41.89809,-87.64879],[41.89831,-87.6494],[41.90001,-87.6519],[41.90081,-87.65538],[41.90117,-87.65589],[41.90262,-87.65647],[41.9036,-87.6575],[41.90453,-87.65816],[41.90504,-87.65829],[41.90844,-87.65774],[41.90909,-87.65749],[41.90907,-87.65923],[41.90985,-87.65895],[41.91052,-87.65694],[41.91078,-87.65686],[41.9109,-87.6495],[41.90377,-87.63964],[41.9039,-87.63145],[41.89563,-87.63122],[41.89572,-87.62548],[41.88887,-87.6252],[41.88751,-87.62762],[41.88743,-87.63565]],
+  'rush-division':[[41.89705,-87.62576],[41.89671,-87.6255],[41.89572,-87.62548],[41.89563,-87.63122],[41.9039,-87.63145],[41.90394,-87.62868],[41.90326,-87.62866],[41.90237,-87.62832]],
+  'sheffield-depaul':[[41.92166,-87.65833],[41.93256,-87.65871],[41.93272,-87.64901],[41.92182,-87.64863]],
+  'streeterville':[[41.89333,-87.61203],[41.89623,-87.61015],[41.89637,-87.60243],[41.89326,-87.60235],[41.89315,-87.60982],[41.89222,-87.6098],[41.89244,-87.60068],[41.89224,-87.60058],[41.89227,-87.59855],[41.89145,-87.59852],[41.89142,-87.60057],[41.89111,-87.60056],[41.89107,-87.60072],[41.89101,-87.60954],[41.88939,-87.60949],[41.88937,-87.60766],[41.88867,-87.60765],[41.88863,-87.60467],[41.88847,-87.6052],[41.88851,-87.61143],[41.88831,-87.61801],[41.88888,-87.624],[41.88985,-87.62373],[41.89653,-87.62392],[41.89775,-87.62374],[41.90083,-87.62375],[41.90097,-87.61913],[41.89467,-87.61491],[41.89313,-87.61369],[41.89341,-87.61262]],
+  'ukrainian-village':[[41.90319,-87.67726],[41.89592,-87.67705],[41.8957,-87.69177],[41.90297,-87.69195]],
+  'united-center':[[41.88885,-87.66707],[41.87549,-87.66664],[41.87526,-87.69132],[41.88111,-87.6915],[41.88111,-87.69216],[41.8844,-87.69228],[41.88443,-87.69159],[41.88609,-87.69169],[41.88703,-87.69122],[41.88758,-87.69052],[41.88817,-87.68867],[41.88841,-87.68662],[41.88863,-87.68662]],
+  'uptown':[[41.97775,-87.64729],[41.97747,-87.64669],[41.97784,-87.64614],[41.97744,-87.64666],[41.97689,-87.64636],[41.97282,-87.64613],[41.9708,-87.64503],[41.96954,-87.64397],[41.96835,-87.64263],[41.96827,-87.64274],[41.96849,-87.64301],[41.96831,-87.64327],[41.96806,-87.64297],[41.9683,-87.64256],[41.96692,-87.64049],[41.96604,-87.63743],[41.96554,-87.63509],[41.96536,-87.63298],[41.96507,-87.63199],[41.96587,-87.63191],[41.9651,-87.63191],[41.96404,-87.63167],[41.96361,-87.63116],[41.96323,-87.631],[41.96284,-87.63107],[41.96245,-87.63145],[41.96138,-87.63422],[41.96006,-87.63576],[41.95954,-87.63664],[41.95934,-87.63794],[41.95967,-87.6401],[41.95919,-87.6403],[41.95969,-87.64016],[41.95988,-87.64067],[41.9603,-87.64096],[41.96079,-87.64074],[41.96088,-87.64022],[41.9604,-87.63932],[41.96028,-87.63876],[41.96049,-87.63732],[41.96138,-87.63583],[41.96204,-87.63535],[41.96249,-87.63541],[41.96284,-87.63592],[41.96288,-87.63685],[41.96234,-87.64125],[41.96216,-87.64176],[41.96182,-87.64213],[41.96113,-87.64227],[41.96026,-87.64156],[41.95939,-87.64161],[41.95935,-87.64102],[41.95933,-87.64163],[41.95836,-87.64175],[41.9548,-87.64102],[41.95438,-87.66225],[41.95803,-87.66451],[41.96163,-87.66595],[41.96153,-87.67398],[41.9761,-87.67441],[41.97646,-87.65126],[41.97681,-87.64904],[41.97704,-87.64886]],
+  'west-loop':[[41.87542,-87.64559],[41.88179,-87.646],[41.88176,-87.64853],[41.87537,-87.64833],[41.87529,-87.65129],[41.8756,-87.65834],[41.87549,-87.66664],[41.88885,-87.66707],[41.88905,-87.64758],[41.88857,-87.64757],[41.88858,-87.64432],[41.88903,-87.64433],[41.88908,-87.63936],[41.88716,-87.63877],[41.88673,-87.63839],[41.88623,-87.63759],[41.88319,-87.63814],[41.88102,-87.63829],[41.87907,-87.6381],[41.87669,-87.63743],[41.87603,-87.63707],[41.8752,-87.63629],[41.87061,-87.63518],[41.86675,-87.63469],[41.85938,-87.63451],[41.8582,-87.63509],[41.85772,-87.63516],[41.85767,-87.63894],[41.86002,-87.63901],[41.85995,-87.64447],[41.86752,-87.64479],[41.87371,-87.64566]],
+  'west-town':[[41.90844,-87.65774],[41.90504,-87.65829],[41.90453,-87.65816],[41.9036,-87.6575],[41.90262,-87.65647],[41.90117,-87.65589],[41.90081,-87.65538],[41.90051,-87.65445],[41.90001,-87.6519],[41.89831,-87.6494],[41.89809,-87.64879],[41.89769,-87.64489],[41.89724,-87.64443],[41.89664,-87.64423],[41.89412,-87.64406],[41.89354,-87.64355],[41.89287,-87.64245],[41.89205,-87.64157],[41.89064,-87.64067],[41.88908,-87.63936],[41.88903,-87.64433],[41.88858,-87.64432],[41.88857,-87.64757],[41.88905,-87.64758],[41.88905,-87.64796],[41.88863,-87.68662],[41.88841,-87.68662],[41.88817,-87.68865],[41.8882,-87.69157],[41.8957,-87.69177],[41.89607,-87.66729],[41.91428,-87.6678],[41.91448,-87.66621],[41.91562,-87.66363],[41.9155,-87.66298],[41.91616,-87.66109],[41.91487,-87.65892],[41.91399,-87.65801],[41.9135,-87.65776],[41.91078,-87.65686],[41.91052,-87.65694],[41.90985,-87.65895],[41.90907,-87.65923],[41.90909,-87.65749]],
+  'wicker-park':[[41.91389,-87.6922],[41.91406,-87.68315],[41.91358,-87.68242],[41.91462,-87.68245],[41.91472,-87.67756],[41.91417,-87.67755],[41.91428,-87.6678],[41.90335,-87.6675],[41.90297,-87.69195]],
+  'wrigleyville':[[41.94447,-87.65424],[41.9472,-87.65652],[41.94707,-87.66402],[41.95435,-87.66422],[41.95449,-87.65454]],
+};
+
+const HOODS = [
+  {id:'uptown',name:'Uptown',sub:'North Side'},
+  {id:'wrigleyville',name:'Wrigleyville',sub:'North Side'},
+  {id:'boystown',name:'Boystown',sub:'North Side'},
+  {id:'lake-view',name:'Lake View',sub:'North Side'},
+  {id:'north-center',name:'North Center',sub:'North Side'},
+  {id:'sheffield-depaul',name:'Sheffield & DePaul',sub:'North Side'},
+  {id:'lincoln-park',name:'Lincoln Park',sub:'North Side'},
+  {id:'bucktown',name:'Bucktown',sub:'North Side'},
+  {id:'logan-square',name:'Logan Square',sub:'Northwest Side'},
+  {id:'wicker-park',name:'Wicker Park',sub:'West Town'},
+  {id:'east-village',name:'East Village',sub:'West Town'},
+  {id:'ukrainian-village',name:'Ukrainian Village',sub:'West Town'},
+  {id:'west-town',name:'West Town',sub:'West Town'},
+  {id:'old-town',name:'Old Town',sub:'Near North Side'},
+  {id:'gold-coast',name:'Gold Coast',sub:'Near North Side'},
+  {id:'magnificent-mile',name:'Magnificent Mile',sub:'Near North Side'},
+  {id:'rush-division',name:'Rush & Division',sub:'Near North Side'},
+  {id:'streeterville',name:'Streeterville',sub:'Near North Side'},
+  {id:'river-north',name:'River North',sub:'Near North Side'},
+  {id:'loop',name:'Loop',sub:'Central'},
+  {id:'millenium-park',name:'Millenium Park',sub:'Central'},
+  {id:'grant-park',name:'Grant Park',sub:'Central'},
+  {id:'printers-row',name:'Printers Row',sub:'Central'},
+  {id:'united-center',name:'United Center',sub:'Near West Side'},
+  {id:'west-loop',name:'West Loop',sub:'Near West Side'},
+  {id:'greektown',name:'Greektown',sub:'Near West Side'},
+  {id:'little-italy-uic',name:'Little Italy, UIC',sub:'Near West Side'},
+  {id:'near-south-side',name:'Near South Side',sub:'Near South Side'},
+  {id:'museum-campus',name:'Museum Campus',sub:'Near South Side'},
+  {id:'chinatown',name:'Chinatown',sub:'Near South Side'},
+  {id:'armour-square',name:'Armour Square',sub:'Near South Side'},
+  {id:'lower-west-side',name:'Lower West Side',sub:'Near South Side'},
+  {id:'mckinley-park',name:'McKinley Park',sub:'Near South Side'},
+  {id:'bridgeport',name:'Bridgeport',sub:'Near South Side'},
+  {id:'douglas',name:'Douglas',sub:'South Side'},
+  {id:'oakland',name:'Oakland',sub:'South Side'},
+  {id:'kenwood',name:'Kenwood',sub:'South Side'},
+  {id:'hyde-park',name:'Hyde Park',sub:'South Side'},
+  {id:'jackson-park',name:'Jackson Park',sub:'South Side'},
+];
+
+const ADJ = {
+  'armour-square':['bridgeport','chinatown','douglas','near-south-side'],
+  'boystown':['lake-view','sheffield-depaul','uptown','wrigleyville'],
+  'bridgeport':['armour-square','chinatown','douglas','lower-west-side','mckinley-park','near-south-side'],
+  'bucktown':['lincoln-park','logan-square','sheffield-depaul','wicker-park'],
+  'chinatown':['armour-square','bridgeport','lower-west-side','near-south-side'],
+  'douglas':['armour-square','bridgeport','museum-campus','near-south-side','oakland'],
+  'east-village':['ukrainian-village','west-town','wicker-park'],
+  'gold-coast':['lincoln-park','magnificent-mile','old-town','rush-division','streeterville'],
+  'grant-park':['loop','millenium-park','museum-campus','near-south-side','printers-row'],
+  'greektown':['little-italy-uic','loop','lower-west-side','west-loop'],
+  'hyde-park':['jackson-park','kenwood','museum-campus'],
+  'jackson-park':['hyde-park','museum-campus'],
+  'kenwood':['hyde-park','museum-campus','oakland'],
+  'lake-view':['boystown','lincoln-park','north-center','sheffield-depaul','uptown','wrigleyville'],
+  'lincoln-park':['bucktown','gold-coast','lake-view','north-center','old-town','sheffield-depaul'],
+  'little-italy-uic':['greektown','lower-west-side','mckinley-park','united-center','west-loop'],
+  'logan-square':['bucktown','north-center','ukrainian-village','west-town','wicker-park'],
+  'loop':['grant-park','greektown','millenium-park','near-south-side','printers-row','river-north','streeterville','west-loop'],
+  'lower-west-side':['bridgeport','chinatown','greektown','little-italy-uic','mckinley-park'],
+  'magnificent-mile':['gold-coast','river-north','rush-division','streeterville'],
+  'mckinley-park':['bridgeport','little-italy-uic','lower-west-side'],
+  'millenium-park':['grant-park','loop','streeterville'],
+  'museum-campus':['douglas','grant-park','hyde-park','jackson-park','kenwood','near-south-side','oakland'],
+  'near-south-side':['armour-square','bridgeport','chinatown','douglas','grant-park','loop','museum-campus','printers-row'],
+  'north-center':['lake-view','lincoln-park','logan-square','sheffield-depaul','uptown'],
+  'oakland':['douglas','kenwood','museum-campus'],
+  'old-town':['gold-coast','lincoln-park','river-north','rush-division','west-town'],
+  'printers-row':['grant-park','loop','near-south-side'],
+  'river-north':['loop','magnificent-mile','old-town','rush-division','streeterville','west-loop','west-town'],
+  'rush-division':['gold-coast','magnificent-mile','old-town','river-north'],
+  'sheffield-depaul':['boystown','bucktown','lake-view','lincoln-park','north-center'],
+  'streeterville':['gold-coast','loop','magnificent-mile','millenium-park','river-north'],
+  'ukrainian-village':['east-village','logan-square','united-center','west-town','wicker-park'],
+  'united-center':['little-italy-uic','ukrainian-village','west-loop','west-town'],
+  'uptown':['boystown','lake-view','north-center','wrigleyville'],
+  'west-loop':['greektown','little-italy-uic','loop','river-north','united-center','west-town'],
+  'west-town':['east-village','logan-square','old-town','river-north','ukrainian-village','united-center','west-loop','wicker-park'],
+  'wicker-park':['bucktown','east-village','logan-square','ukrainian-village','west-town'],
+  'wrigleyville':['boystown','lake-view','uptown'],
+};
+
+
+// ═══════════════════════════════════════════════════════════════════
+// MASTER BOUNDARY — single unified play zone polygon
+//
+// Traces the outer perimeter of all 17 neighbourhoods as one
+// continuous walkable boundary. The fog mask uses THIS polygon only,
+// so there are zero gaps, zero black patches from rivers/rail/parks
+// that fall between neighbourhood boundaries.
+//
+// Traced clockwise from NW corner (Diversey & Western):
+//   N:  Diversey Ave (41.9325)
+//   E:  Lake Michigan shoreline + Navy Pier
+//   S:  Roosevelt Rd (41.8674) then I-290 (41.8752) west of river
+//   W:  Western Ave (41.8752→41.8820), then Halsted/river corridor north
+//
+// The boundary deliberately includes the river, rail corridors, and
+// parks between neighbourhoods — players can physically be there.
+// ═══════════════════════════════════════════════════════════════════
+const MASTER_BOUNDARY = [
+  // True outer boundary — Shapely union of all 39 City GeoJSON polygons
+  // Simplified to 0.0002 degrees (~15m) tolerance
+  [41.82665,-87.68686],
+  [41.82662,-87.68736],
+  [41.83469,-87.68745],
+  [41.83648,-87.68205],
+  [41.83491,-87.68746],
+  [41.85934,-87.68807],
+  [41.85937,-87.68583],
+  [41.85934,-87.68817],
+  [41.86306,-87.68818],
+  [41.86656,-87.69075],
+  [41.86657,-87.69047],
+  [41.86795,-87.69111],
+  [41.88111,-87.6915],
+  [41.88111,-87.69216],
+  [41.8844,-87.69228],
+  [41.88443,-87.69159],
+  [41.88609,-87.69169],
+  [41.88703,-87.69122],
+  [41.88758,-87.69052],
+  [41.88817,-87.68865],
+  [41.8882,-87.69157],
+  [41.90297,-87.69195],
+  [41.91389,-87.6922],
+  [41.91364,-87.72235],
+  [41.91538,-87.72314],
+  [41.91537,-87.72406],
+  [41.9172,-87.72422],
+  [41.9172,-87.72391],
+  [41.91902,-87.72488],
+  [41.91899,-87.72661],
+  [41.92188,-87.7267],
+  [41.92265,-87.72708],
+  [41.92265,-87.72644],
+  [41.92448,-87.72677],
+  [41.92447,-87.7277],
+  [41.93173,-87.73146],
+  [41.93218,-87.68788],
+  [41.91399,-87.68732],
+  [41.9361,-87.68799],
+  [41.93571,-87.68754],
+  [41.93601,-87.68782],
+  [41.93646,-87.68856],
+  [41.9368,-87.69029],
+  [41.93877,-87.69147],
+  [41.94026,-87.69363],
+  [41.9431,-87.6954],
+  [41.94997,-87.69686],
+  [41.95392,-87.69455],
+  [41.95703,-87.69427],
+  [41.96127,-87.69475],
+  [41.96153,-87.67398],
+  [41.9761,-87.67441],
+  [41.97646,-87.65126],
+  [41.97681,-87.64904],
+  [41.97775,-87.64729],
+  [41.97747,-87.64669],
+  [41.97784,-87.64614],
+  [41.97744,-87.64666],
+  [41.97689,-87.64636],
+  [41.97282,-87.64613],
+  [41.9708,-87.64503],
+  [41.96835,-87.64263],
+  [41.96831,-87.64327],
+  [41.96806,-87.64297],
+  [41.9683,-87.64256],
+  [41.96692,-87.64049],
+  [41.96604,-87.63743],
+  [41.96507,-87.63199],
+  [41.96587,-87.63191],
+  [41.96404,-87.63167],
+  [41.96323,-87.631],
+  [41.96245,-87.63145],
+  [41.96138,-87.63422],
+  [41.95954,-87.63664],
+  [41.95934,-87.63794],
+  [41.95967,-87.6401],
+  [41.95919,-87.6403],
+  [41.95969,-87.64016],
+  [41.9603,-87.64096],
+  [41.96079,-87.64074],
+  [41.96088,-87.64022],
+  [41.96028,-87.63876],
+  [41.96049,-87.63732],
+  [41.96138,-87.63583],
+  [41.96204,-87.63535],
+  [41.96249,-87.63541],
+  [41.96284,-87.63592],
+  [41.96234,-87.64125],
+  [41.96182,-87.64213],
+  [41.96113,-87.64227],
+  [41.96026,-87.64156],
+  [41.95939,-87.64161],
+  [41.95935,-87.64102],
+  [41.95933,-87.64163],
+  [41.95836,-87.64175],
+  [41.9548,-87.64102],
+  [41.94943,-87.63864],
+  [41.94576,-87.63625],
+  [41.9424,-87.633],
+  [41.94218,-87.63364],
+  [41.94318,-87.63443],
+  [41.94298,-87.63592],
+  [41.94579,-87.63736],
+  [41.9464,-87.64002],
+  [41.94755,-87.64103],
+  [41.94798,-87.64179],
+  [41.94785,-87.64213],
+  [41.94595,-87.64005],
+  [41.94483,-87.64046],
+  [41.9436,-87.63959],
+  [41.94303,-87.63878],
+  [41.94121,-87.63831],
+  [41.93983,-87.63712],
+  [41.94026,-87.63695],
+  [41.94023,-87.63673],
+  [41.93976,-87.63682],
+  [41.93971,-87.6355],
+  [41.94015,-87.63499],
+  [41.94069,-87.63478],
+  [41.94086,-87.63515],
+  [41.94074,-87.63476],
+  [41.94186,-87.63445],
+  [41.9415,-87.6339],
+  [41.93945,-87.63358],
+  [41.93724,-87.63229],
+  [41.93584,-87.6321],
+  [41.93367,-87.63044],
+  [41.93253,-87.63066],
+  [41.93306,-87.63074],
+  [41.93297,-87.63138],
+  [41.93258,-87.6316],
+  [41.9326,-87.63251],
+  [41.93239,-87.63125],
+  [41.93259,-87.63107],
+  [41.93239,-87.63124],
+  [41.93178,-87.63067],
+  [41.93008,-87.63101],
+  [41.92901,-87.63083],
+  [41.92808,-87.6304],
+  [41.928,-87.63061],
+  [41.92662,-87.6296],
+  [41.92615,-87.62966],
+  [41.92578,-87.63027],
+  [41.92378,-87.63001],
+  [41.92275,-87.629],
+  [41.92309,-87.62835],
+  [41.92243,-87.62949],
+  [41.92103,-87.62854],
+  [41.92137,-87.6277],
+  [41.92073,-87.62892],
+  [41.9195,-87.62796],
+  [41.91977,-87.62733],
+  [41.91924,-87.62844],
+  [41.9188,-87.62815],
+  [41.918,-87.62735],
+  [41.91825,-87.6268],
+  [41.9176,-87.62791],
+  [41.91644,-87.62671],
+  [41.91684,-87.62609],
+  [41.91626,-87.62679],
+  [41.91381,-87.62328],
+  [41.91353,-87.62189],
+  [41.91379,-87.62059],
+  [41.91319,-87.62075],
+  [41.91272,-87.62284],
+  [41.91142,-87.62466],
+  [41.91027,-87.6251],
+  [41.90753,-87.62481],
+  [41.90405,-87.62372],
+  [41.90316,-87.62256],
+  [41.90205,-87.62187],
+  [41.90156,-87.6199],
+  [41.90097,-87.61913],
+  [41.89313,-87.61369],
+  [41.89333,-87.61203],
+  [41.89623,-87.61015],
+  [41.89637,-87.60243],
+  [41.89326,-87.60235],
+  [41.89315,-87.60982],
+  [41.89222,-87.6098],
+  [41.89227,-87.59855],
+  [41.89145,-87.59852],
+  [41.89142,-87.60057],
+  [41.89107,-87.60072],
+  [41.89101,-87.60954],
+  [41.88939,-87.60949],
+  [41.88937,-87.60766],
+  [41.88867,-87.60765],
+  [41.88872,-87.6052],
+  [41.88863,-87.60467],
+  [41.88835,-87.60513],
+  [41.88831,-87.60246],
+  [41.88797,-87.60985],
+  [41.88408,-87.60999],
+  [41.88406,-87.61274],
+  [41.88339,-87.61288],
+  [41.88282,-87.61357],
+  [41.88244,-87.61579],
+  [41.8821,-87.61635],
+  [41.88141,-87.6165],
+  [41.88142,-87.61575],
+  [41.88057,-87.61572],
+  [41.88056,-87.61648],
+  [41.8689,-87.61621],
+  [41.86834,-87.6154],
+  [41.86851,-87.61385],
+  [41.86827,-87.61271],
+  [41.86747,-87.61235],
+  [41.86675,-87.61269],
+  [41.86686,-87.60775],
+  [41.86724,-87.60668],
+  [41.86698,-87.60594],
+  [41.86642,-87.60561],
+  [41.86568,-87.60605],
+  [41.86479,-87.60605],
+  [41.86516,-87.60693],
+  [41.86427,-87.60758],
+  [41.86238,-87.60696],
+  [41.86201,-87.60602],
+  [41.86008,-87.60596],
+  [41.85996,-87.60707],
+  [41.85336,-87.60651],
+  [41.85317,-87.60892],
+  [41.85377,-87.6099],
+  [41.85679,-87.60933],
+  [41.85769,-87.60994],
+  [41.85863,-87.60988],
+  [41.85928,-87.61048],
+  [41.86065,-87.61067],
+  [41.86085,-87.61035],
+  [41.86351,-87.60961],
+  [41.86586,-87.61048],
+  [41.86584,-87.61267],
+  [41.86344,-87.61343],
+  [41.86249,-87.61331],
+  [41.86137,-87.61256],
+  [41.86082,-87.61255],
+  [41.86063,-87.6122],
+  [41.86035,-87.61239],
+  [41.86035,-87.61215],
+  [41.85999,-87.61244],
+  [41.85858,-87.61219],
+  [41.85834,-87.61274],
+  [41.85763,-87.61304],
+  [41.85633,-87.61284],
+  [41.85493,-87.6112],
+  [41.85312,-87.61074],
+  [41.85091,-87.60922],
+  [41.848,-87.60948],
+  [41.84614,-87.60841],
+  [41.84469,-87.60914],
+  [41.84527,-87.60941],
+  [41.84336,-87.60877],
+  [41.84231,-87.60802],
+  [41.84056,-87.60753],
+  [41.84056,-87.60668],
+  [41.8405,-87.6075],
+  [41.83965,-87.60721],
+  [41.83864,-87.60616],
+  [41.83896,-87.60471],
+  [41.83983,-87.60419],
+  [41.83888,-87.60467],
+  [41.83855,-87.60613],
+  [41.83612,-87.60566],
+  [41.83499,-87.60456],
+  [41.83442,-87.60503],
+  [41.8338,-87.60487],
+  [41.8332,-87.60435],
+  [41.83273,-87.60301],
+  [41.83069,-87.60239],
+  [41.82802,-87.60006],
+  [41.82634,-87.59775],
+  [41.82262,-87.59727],
+  [41.82032,-87.59565],
+  [41.81828,-87.59256],
+  [41.81629,-87.59199],
+  [41.81465,-87.59046],
+  [41.81352,-87.59004],
+  [41.81219,-87.58863],
+  [41.81184,-87.58734],
+  [41.81117,-87.58693],
+  [41.81003,-87.58689],
+  [41.80699,-87.58495],
+  [41.80429,-87.58124],
+  [41.80393,-87.58011],
+  [41.80293,-87.58045],
+  [41.80078,-87.58047],
+  [41.79837,-87.57994],
+  [41.79701,-87.57821],
+  [41.79698,-87.57588],
+  [41.79624,-87.57516],
+  [41.79544,-87.57544],
+  [41.79473,-87.5783],
+  [41.7942,-87.57901],
+  [41.79349,-87.5793],
+  [41.79338,-87.58664],
+  [41.79339,-87.5793],
+  [41.79204,-87.57963],
+  [41.79171,-87.57945],
+  [41.79002,-87.57835],
+  [41.78857,-87.57632],
+  [41.7883,-87.57776],
+  [41.78818,-87.57715],
+  [41.78631,-87.5772],
+  [41.7836,-87.57605],
+  [41.78183,-87.5723],
+  [41.78129,-87.56976],
+  [41.78161,-87.5684],
+  [41.7846,-87.56753],
+  [41.78154,-87.56831],
+  [41.78025,-87.57308],
+  [41.77982,-87.57295],
+  [41.77911,-87.57473],
+  [41.77778,-87.57529],
+  [41.77701,-87.57519],
+  [41.77615,-87.57461],
+  [41.77579,-87.57504],
+  [41.77538,-87.57331],
+  [41.77588,-87.57194],
+  [41.77666,-87.57177],
+  [41.77831,-87.57336],
+  [41.77914,-87.57326],
+  [41.77918,-87.57217],
+  [41.77858,-87.57182],
+  [41.7764,-87.56881],
+  [41.77379,-87.56645],
+  [41.77356,-87.56681],
+  [41.77334,-87.5863],
+  [41.78638,-87.5866],
+  [41.78614,-87.5866],
+  [41.78587,-87.60604],
+  [41.82317,-87.60686],
+  [41.82331,-87.60644],
+  [41.82396,-87.60687],
+  [41.82296,-87.68608],
+  [41.82435,-87.68614],
+  [41.82489,-87.68667],
+  [41.82523,-87.68611]
+];
+const PLACES={
+  park:[
+    {name:'Millennium Park',lat:41.8827,lng:-87.6233,hood:'millenium-park'},
+    {name:'Maggie Daley Park',lat:41.8826,lng:-87.6186,hood:'millenium-park'},
+    {name:'Grant Park',lat:41.8760,lng:-87.6210,hood:'grant-park'},
+    {name:'Lincoln Park (main)',lat:41.9280,lng:-87.6340,hood:'lincoln-park'},
+    {name:'Oz Park',lat:41.9219,lng:-87.6486,hood:'lincoln-park'},
+    {name:'North Ave Beach',lat:41.9176,lng:-87.6360,hood:'lincoln-park'},
+    {name:'Mary Bartelme Park',lat:41.8833,lng:-87.6500,hood:'west-loop'},
+    {name:'Union Park',lat:41.8807,lng:-87.6598,hood:'west-loop'},
+    {name:'Wicker Park (park)',lat:41.9088,lng:-87.6796,hood:'wicker-park'},
+    {name:'Holstein Park',lat:41.9148,lng:-87.6820,hood:'bucktown'},
+    {name:'Churchill Field Park',lat:41.9188,lng:-87.6820,hood:'bucktown'},
+    {name:'Smith Park',lat:41.9004,lng:-87.6720,hood:'west-town'},
+    {name:'Eckhart Park',lat:41.8954,lng:-87.6640,hood:'west-town'},
+    {name:'Pulaski Park',lat:41.9048,lng:-87.6582,hood:'wicker-park'},
+    {name:'Washington Square Park',lat:41.8996,lng:-87.6330,hood:'gold-coast'},
+    {name:'Jonquil Park',lat:41.9254,lng:-87.6499,hood:'lincoln-park'},
+    {name:'Ping Tom Memorial Park',lat:41.8554,lng:-87.6361,hood:'grant-park'},
+    {name:'Museum Campus',lat:41.8663,lng:-87.6170,hood:'grant-park'},
+  ],
+  hospital:[
+    {name:'Northwestern Memorial',lat:41.8953,lng:-87.6210,hood:'streeterville'},
+    {name:"Lurie Children's",lat:41.8963,lng:-87.6191,hood:'streeterville'},
+    {name:'Rush University Medical',lat:41.8740,lng:-87.6694,hood:'united-center'},
+    {name:'Stroger Hospital',lat:41.8745,lng:-87.6785,hood:'united-center'},
+    {name:'Jesse Brown VA',lat:41.8743,lng:-87.6726,hood:'united-center'},
+    {name:'Advocate Illinois Masonic',lat:41.9380,lng:-87.6672,hood:'lincoln-park'},
+  ],
+  library:[
+    {name:'Harold Washington Library',lat:41.8764,lng:-87.6280,hood:'loop'},
+    {name:'Near North Branch',lat:41.9001,lng:-87.6383,hood:'gold-coast'},
+    {name:'Lincoln Park Branch',lat:41.9250,lng:-87.6475,hood:'lincoln-park'},
+    {name:'Bucktown-Wicker Park Branch',lat:41.9128,lng:-87.6802,hood:'wicker-park'},
+    {name:'West Loop Branch',lat:41.8833,lng:-87.6610,hood:'west-loop'},
+    {name:'Ukrainian Village (Lozano)',lat:41.8980,lng:-87.6820,hood:'ukrainian-village'},
+    {name:'West Town (Eckhart Park)',lat:41.8954,lng:-87.6640,hood:'west-town'},
+  ],
+  museum:[
+    {name:'Art Institute of Chicago',lat:41.8796,lng:-87.6237,hood:'grant-park'},
+    {name:'Field Museum',lat:41.8663,lng:-87.6170,hood:'grant-park'},
+    {name:'Shedd Aquarium',lat:41.8676,lng:-87.6140,hood:'grant-park'},
+    {name:'Adler Planetarium',lat:41.8663,lng:-87.6068,hood:'grant-park'},
+    {name:'Chicago History Museum',lat:41.9115,lng:-87.6318,hood:'lincoln-park'},
+    {name:'Museum of Contemporary Art',lat:41.8972,lng:-87.6213,hood:'streeterville'},
+    {name:'Peggy Notebaert Nature Museum',lat:41.9261,lng:-87.6348,hood:'lincoln-park'},
+    {name:"Chicago Children's Museum",lat:41.8913,lng:-87.6092,hood:'streeterville'},
+    {name:'Ukrainian Institute of Modern Art',lat:41.8968,lng:-87.6886,hood:'ukrainian-village'},
+    {name:'Intuit: Center for Outsider Art',lat:41.8883,lng:-87.6533,hood:'west-loop'},
+    {name:'Richard H. Driehaus Museum',lat:41.8993,lng:-87.6281,hood:'gold-coast'},
+    {name:'National Museum of Mexican Art',lat:41.8556,lng:-87.6720,hood:'united-center'},
+  ],
+  train:[
+    {name:'Clark/Lake',lat:41.8858,lng:-87.6309,hood:'loop'},
+    {name:'Chicago (Red/Brown)',lat:41.8965,lng:-87.6281,hood:'magnificent-mile'},
+    {name:'Grand (Red)',lat:41.8916,lng:-87.6281,hood:'river-north'},
+    {name:'Merchandise Mart (Brown)',lat:41.8885,lng:-87.6354,hood:'river-north'},
+    {name:'Fullerton (Red/Brown/Purple)',lat:41.9254,lng:-87.6527,hood:'lincoln-park'},
+    {name:'Armitage (Brown/Purple)',lat:41.9182,lng:-87.6529,hood:'lincoln-park'},
+    {name:'Sedgwick (Brown/Purple)',lat:41.9107,lng:-87.6386,hood:'old-town'},
+    {name:'Division (Red)',lat:41.9034,lng:-87.6310,hood:'rush-division'},
+    {name:'North/Clybourn (Red)',lat:41.9100,lng:-87.6501,hood:'old-town'},
+    {name:'Roosevelt (Red/Green/Orange)',lat:41.8674,lng:-87.6269,hood:'grant-park'},
+    {name:'Jackson (Red)',lat:41.8783,lng:-87.6274,hood:'loop'},
+    {name:'Monroe (Red)',lat:41.8809,lng:-87.6278,hood:'loop'},
+    {name:'Washington/Wabash',lat:41.8829,lng:-87.6258,hood:'loop'},
+    {name:'State/Lake',lat:41.8860,lng:-87.6276,hood:'loop'},
+    {name:'Lake (Brown/Green/Orange/Pink)',lat:41.8849,lng:-87.6279,hood:'loop'},
+    {name:'Quincy',lat:41.8784,lng:-87.6340,hood:'loop'},
+    {name:'Harold Washington Library (Brown)',lat:41.8757,lng:-87.6282,hood:'loop'},
+    {name:'UIC-Halsted (Blue)',lat:41.8753,lng:-87.6499,hood:'greektown'},
+    {name:'Racine (Blue)',lat:41.8753,lng:-87.6588,hood:'united-center'},
+    {name:'Illinois Medical District (Blue)',lat:41.8753,lng:-87.6730,hood:'united-center'},
+    {name:'Western (Blue)',lat:41.8753,lng:-87.6876,hood:'united-center'},
+    {name:'Morgan (Green/Pink)',lat:41.8853,lng:-87.6518,hood:'west-loop'},
+    {name:'Damen (Blue)',lat:41.9100,lng:-87.6772,hood:'wicker-park'},
+    {name:'Division (Blue)',lat:41.9030,lng:-87.6664,hood:'east-village'},
+    {name:'Chicago (Blue)',lat:41.8960,lng:-87.6558,hood:'west-town'},
+    {name:'Ashland (Blue)',lat:41.8854,lng:-87.6659,hood:'west-loop'},
+    {name:'California (Blue)',lat:41.9216,lng:-87.6976,hood:'bucktown'},
+    {name:"Western (Blue-O'Hare)",lat:41.9160,lng:-87.6881,hood:'wicker-park'},
+    {name:'Damen (Brown)',lat:41.9322,lng:-87.6789,hood:'bucktown'},
+    {name:'Paulina (Brown)',lat:41.9443,lng:-87.6701,hood:'sheffield-depaul'},
+    {name:'Southport (Brown)',lat:41.9434,lng:-87.6634,hood:'sheffield-depaul'},
+    {name:'Wellington (Brown)',lat:41.9361,lng:-87.6537,hood:'sheffield-depaul'},
+  ],
+  airport:[
+    {name:"O'Hare International",lat:41.9742,lng:-87.9073,hood:null},
+    {name:'Midway International',lat:41.7868,lng:-87.7522,hood:null},
+  ],
+  cemetery:[
+    {name:'Graceland Cemetery',lat:41.9560,lng:-87.6606,hood:'lincoln-park'},
+    {name:'St. Boniface Cemetery',lat:41.9527,lng:-87.7242,hood:'bucktown'},
+  ],
+  cinema:[
+    {name:'AMC River East 21',lat:41.8907,lng:-87.6144,hood:'streeterville'},
+    {name:'AMC DINE-IN Block 37',lat:41.8823,lng:-87.6285,hood:'loop'},
+    {name:'Gene Siskel Film Center',lat:41.8795,lng:-87.6263,hood:'loop'},
+    {name:'Music Box Theatre',lat:41.9469,lng:-87.6642,hood:'sheffield-depaul'},
+    {name:'Landmark Century Centre',lat:41.9278,lng:-87.6511,hood:'lincoln-park'},
+    {name:'Logan Theatre',lat:41.9278,lng:-87.7074,hood:'bucktown'},
+    {name:'Showplace ICON at Roosevelt',lat:41.8674,lng:-87.6292,hood:'grant-park'},
+  ],
+};
+
+const CENTER=[41.8900,-87.6500];
+const M2M=1609.34;
+let map,seekerMarker,hiderMarker,fogGroup,zoneGroup;
+let myRole=null;
+let myPos={lat:41.8900,lng:-87.6500};
+let hiderPos=null;
+let watchId=null;
+let gpsLocked=false;
+let centerOnGPS=true;
+let gameCode=null;
+let selectedIds=[],activePolys=[],eliminations=[],refLayers=[];
+
+let qCount=0,logEntries=[],logOpen=false,gameStartTime=null;
+let elimShapes=[]; // GeoJSON polygons for smooth elimination overlays
+let elimRecords=[]; // Serialisable elimination records for Firebase persistence
+let fbUnsubscribe=null; // Firebase listener cleanup
+let pickedTent=null,pinMode=null,pinA=null,pinB=null,pinMarkers={A:null,B:null},pinClick=null;
+let timerInterval=null;
+
+// ═══════════════════════════════════════════════════════════════════
+// ROLE / NAVIGATION
+// ═══════════════════════════════════════════════════════════════════
+// ── New flow ──────────────────────────────────────────────────────
+// 1. Setup screen is always first (neighbourhood selection)
+// 2. After selecting neighbourhoods, code is generated
+// 3. Seeker taps "I'm the Seeker" → launches game
+// 4. Hider taps "I'm the Hider" → goes to hider map screen
+// 5. Hider joins via shared link → sees zone + taps Ready
+// ─────────────────────────────────────────────────────────────────
+
+function launchAsSeeker(){
+  myRole='seeker';
+  launchGame();
+}
+
+function launchAsHiderFromSetup(){
+  // The person who set up the game is also the hider
+  myRole='hider';
+  startHiderMap();
+}
+
+function backToRole(){
+  stopGPS();
+  document.getElementById('setup-screen').style.display='flex';
+  document.getElementById('hider-screen').style.display='none';
+}
+
+function promptJoinCode(){
+  const code=prompt('Enter the game code from the seeker:');
+  if(!code) return;
+  const cleaned=code.toUpperCase().replace(/[^A-Z0-9]/g,'');
+  if(cleaned.length<4){toast('Invalid code','err');return;}
+  gameCode=cleaned;
+  myRole='hider';
+  // Load game config from Firebase then show hider map
+  loadGameAndShowHider(cleaned);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// HIDER SETUP — generate code + share link
+// ═══════════════════════════════════════════════════════════════════
+function generateCode(){
+  const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  return Array.from({length:6},()=>chars[Math.floor(Math.random()*chars.length)]).join('');
+}
+
+function onNeighbourhoodsReady(){
+  // Called whenever selection changes to update code + buttons
+  const hasSelection = selectedIds.length > 0;
+  document.getElementById('game-code-section').style.display = hasSelection?'block':'none';
+  document.getElementById('role-btn-row').style.display = hasSelection?'flex':'none';
+  document.getElementById('btn-seeker').disabled = !hasSelection;
+  document.getElementById('btn-hider-join').disabled = !hasSelection;
+
+  if(hasSelection && !gameCode){
+    // Generate code and save game config to Firebase
+    gameCode = generateCode();
+    document.getElementById('setup-code-display').textContent = gameCode.match(/.{1,3}/g).join('  ');
+    // Write game config to Firebase so hider can load it
+    if(window._fbSet){
+      window._fbSet(`games/${gameCode}/config`,{
+        neighbourhoods: selectedIds,
+        createdAt: Date.now()
+      });
+    }
+  } else if(!hasSelection){
+    gameCode = null;
+  }
+}
+
+function shareSetupLink(){
+  // Share hider link (no role param = hider by default)
+  const url=`${location.origin}${location.pathname}?join=${gameCode}`;
+  if(navigator.share){
+    navigator.share({title:'CityPlay Vanish — join as hider',text:`Game code: ${gameCode}`,url}).catch(()=>{});
+  } else {
+    navigator.clipboard.writeText(url).then(()=>toast('Link copied for hider','go')).catch(()=>{});
+  }
+}
+
+function copyRejoinLink(){
+  const url=getSeekerRejoinLink();
+  if(navigator.share){
+    navigator.share({title:'Rejoin CityPlay Vanish',text:'Tap to rejoin your game as seeker',url}).catch(()=>{});
+  } else {
+    navigator.clipboard.writeText(url).then(()=>toast('Rejoin link copied','go')).catch(()=>{});
+  }
+}
+
+function getSeekerRejoinLink(){
+  // Seeker uses this link to rejoin after closing browser
+  return `${location.origin}${location.pathname}?join=${gameCode}&role=seeker`;
+}
+
+function startHiderMap(){
+  // Show hider map with zone boundaries
+  document.getElementById('setup-screen').style.display='none';
+  document.getElementById('hider-screen').style.display='flex';
+  initHiderMap();
+}
+
+function loadGameAndShowHider(code){
+  // Hider joined via link — load game config from Firebase
+  if(window._fbListen){
+    const unsub = window._fbListen(`games/${code}/config`, config=>{
+      unsub(); // one-time read
+      if(!config){toast('Game not found','err');return;}
+      selectedIds = config.neighbourhoods||[];
+      gameCode = code;
+      document.getElementById('setup-screen').style.display='none';
+      document.getElementById('hider-screen').style.display='flex';
+      initHiderMap();
+    });
+  } else {
+    toast('Firebase not ready yet, try again','err');
+  }
+}
+
+let hiderMapObj=null;
+
+function initHiderMap(){
+  // Update zone name in header
+  const names=HOODS.filter(h=>selectedIds.includes(h.id)).map(h=>h.name);
+  const zoneLabel = names.length<=3 ? names.join(', ') : `${names.slice(0,2).join(', ')} +${names.length-2} more`;
+  document.getElementById('hider-zone-name').textContent=zoneLabel;
+
+  // Init the hider's map
+  if(!hiderMapObj){
+    hiderMapObj=L.map('hider-map',{center:[41.8900,-87.6500],zoom:14,zoomControl:true,attributionControl:false});
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{maxZoom:19,subdomains:'abcd'}).addTo(hiderMapObj);
+  }
+
+  // Draw selected neighbourhood boundaries
+  const activePs = selectedIds.map(id=>({id,poly:POLY[id]}));
+  const allLats = activePs.flatMap(({poly})=>poly.map(p=>p[0]));
+  const allLngs = activePs.flatMap(({poly})=>poly.map(p=>p[1]));
+
+  // Dim everything outside selected zone
+  const worldBig=[[-180,-90],[180,-90],[180,90],[-180,90],[-180,-90]];
+  activePs.forEach(({poly})=>{
+    // Draw zone outline
+    L.polygon(poly,{color:'#ff6b35',weight:2.5,opacity:0.8,fillColor:'#ff6b35',fillOpacity:0.05,dashArray:'8,5',interactive:false}).addTo(hiderMapObj);
+  });
+
+  // Dim out-of-zone areas
+  const masterHole=MASTER_BOUNDARY.map(p=>[p[1],p[0]]);
+  masterHole.push(masterHole[0]);
+  L.geoJSON({type:'Feature',geometry:{type:'Polygon',coordinates:[worldBig,masterHole]}},{
+    style:{fillColor:'#0d0d12',fillOpacity:0.85,color:'transparent',weight:0,interactive:false}
+  }).addTo(hiderMapObj);
+  HOODS.forEach(h=>{
+    if(selectedIds.includes(h.id)) return;
+    const poly=POLY[h.id]; if(!poly) return;
+    L.polygon(poly,{fillColor:'#0a0a10',fillOpacity:0.72,color:'rgba(255,107,53,0.1)',weight:0.5,interactive:false}).addTo(hiderMapObj);
+  });
+
+  // Fit to selected zone
+  const bounds=L.latLngBounds([Math.min(...allLats),Math.min(...allLngs)],[Math.max(...allLats),Math.max(...allLngs)]);
+  hiderMapObj.fitBounds(bounds,{padding:[60,60],maxZoom:16});
+  setTimeout(()=>hiderMapObj.invalidateSize(),100);
+
+  // Listen for seeker position
+  if(gameCode && window._fbListen){
+    let seekerHiderMarker=null;
+    const seekerIcon=L.divIcon({className:'',html:'<div class="seeker-dot"></div>',iconSize:[18,18],iconAnchor:[9,9]});
+    let lastSeenTs=null;
+    let lastSeenInterval=null;
+
+    function updateLastSeenUI(){
+      const el=document.getElementById('seeker-last-seen');
+      const txt=document.getElementById('seeker-last-seen-text');
+      const dot=document.getElementById('seeker-dot-status');
+      if(!el||!lastSeenTs) return;
+      el.style.display='flex';
+      el.style.alignItems='center';
+      const secAgo=Math.floor((Date.now()-lastSeenTs)/1000);
+      if(secAgo<10){
+        txt.textContent='Seeker · live';
+        dot.style.background='var(--go)';
+        dot.style.boxShadow='0 0 6px var(--go)';
+      } else if(secAgo<60){
+        txt.textContent=`Seeker · ${secAgo}s ago`;
+        dot.style.background='var(--volt)';
+        dot.style.boxShadow='none';
+      } else {
+        const minAgo=Math.floor(secAgo/60);
+        txt.textContent=`Seeker · ${minAgo}m ago`;
+        dot.style.background='var(--danger)';
+        dot.style.boxShadow='none';
+      }
+    }
+
+    fbUnsubscribe=window._fbListen(`games/${gameCode}/seeker`,pos=>{
+      if(!pos||!hiderMapObj) return;
+      lastSeenTs=pos.ts||Date.now();
+      if(!seekerHiderMarker){
+        seekerHiderMarker=L.marker([pos.lat,pos.lng],{icon:seekerIcon,zIndexOffset:1000}).addTo(hiderMapObj);
+      } else {
+        seekerHiderMarker.setLatLng([pos.lat,pos.lng]);
+      }
+      updateLastSeenUI();
+      // Start interval to keep "X seconds ago" updating
+      if(!lastSeenInterval){
+        lastSeenInterval=setInterval(updateLastSeenUI,5000);
+      }
+    });
+  }
+}
+
+function hiderReady(){
+  // Signal to seeker that hider is ready
+  if(gameCode && window._fbSet){
+    window._fbSet(`games/${gameCode}/status`,'ready');
+  }
+  toast('Seeker has been notified — game on!','go');
+  document.querySelector('#hider-screen button[onclick="hiderReady()"]').textContent='✓ HIDDEN — WAITING FOR SEEKER';
+  document.querySelector('#hider-screen button[onclick="hiderReady()"]').disabled=true;
+}
+// copyLink and shareLink consolidated into shareSetupLink (old hider screen removed)
+
+// ═══════════════════════════════════════════════════════════════════
+// GPS — geolocation + sharing
+// ═══════════════════════════════════════════════════════════════════
+function startGPS(context){
+  if(!navigator.geolocation){
+    toast('GPS not supported on this device','err');
+    return;
+  }
+  const statusEl=null; // GPS status shown only for hider (removed)
+  if(statusEl) statusEl.textContent='📡 Requesting GPS access…';
+  watchId=navigator.geolocation.watchPosition(
+    pos=>{
+      myPos={lat:pos.coords.latitude,lng:pos.coords.longitude,acc:pos.coords.accuracy};
+      gpsLocked=true;
+      if(context==='hider'){
+        // Hider has no GPS status display
+        // hider-start-btn removed
+      }
+      // Seeker writes their position to Firebase so hider can see it
+      if(myRole==='seeker' && gameCode && window._fbSet){
+        window._fbSet(`games/${gameCode}/seeker`,{
+          lat:myPos.lat, lng:myPos.lng,
+          acc:Math.round(pos.coords.accuracy),
+          ts:Date.now()
+        });
+      }
+      if(map){
+        if(myRole==='seeker' && seekerMarker){
+          seekerMarker.setLatLng([myPos.lat,myPos.lng]);
+        } else if(myRole==='hider' && seekerMarker){
+          seekerMarker.setLatLng([myPos.lat,myPos.lng]);
+        }
+        if(centerOnGPS) map.panTo([myPos.lat,myPos.lng],{animate:true,duration:0.5});
+      }
+    },
+    err=>{
+      gpsLocked=false;
+      const msg=err.code===1?'Permission denied. Allow location to play.':err.code===2?'Position unavailable.':'GPS timeout.';
+      if(statusEl){statusEl.textContent='❌ '+msg;statusEl.className='gps-status error';}
+      toast(msg,'err');
+    },
+    {enableHighAccuracy:true,maximumAge:5000,timeout:15000}
+  );
+}
+function stopGPS(){
+  if(watchId!==null){navigator.geolocation.clearWatch(watchId);watchId=null;}
+  gpsLocked=false;
+}
+function centerOnMe(){
+  if(!gpsLocked||!map) return;
+  centerOnGPS=true;
+  map.flyTo([myPos.lat,myPos.lng],map.getZoom()<15?15:map.getZoom(),{duration:0.6});
+  document.getElementById('gps-btn').classList.add('locked');
+  setTimeout(()=>document.getElementById('gps-btn').classList.remove('locked'),1500);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SETUP — neighbourhood selection (seeker only)
+// ═══════════════════════════════════════════════════════════════════
+function adjToSelection(){
+  if(!selectedIds.length) return new Set(HOODS.map(h=>h.id));
+  const s=new Set();
+  selectedIds.forEach(id=>{(ADJ[id]||[]).forEach(nb=>{if(!selectedIds.includes(nb)) s.add(nb);});});
+  return s;
+}
+function isConnected(ids){
+  if(ids.length<=1) return true;
+  const vis=new Set([ids[0]]),q=[ids[0]];
+  while(q.length){const c=q.shift();(ADJ[c]||[]).forEach(nb=>{if(ids.includes(nb)&&!vis.has(nb)){vis.add(nb);q.push(nb);}});}
+  return vis.size===ids.length;
+}
+function buildGrid(){
+  document.getElementById('nb-grid').innerHTML=HOODS.map(h=>
+    `<button class="nb-chip first-pick" id="chip-${h.id}" onclick="toggleHood('${h.id}')">${h.name}<span class="nb-sub">${h.sub}</span></button>`
+  ).join('');
+}
+function refreshGrid(){
+  const adj=adjToSelection();
+  HOODS.forEach(h=>{
+    const c=document.getElementById('chip-'+h.id);
+    if(!c) return;
+    c.className='nb-chip';
+    if(selectedIds.includes(h.id)) c.classList.add('selected');
+    else if(adj.has(h.id)) c.classList.add('adjacent');
+    else if(selectedIds.length>0) c.classList.add('locked');
+    else c.classList.add('first-pick');
+  });
+}
+function toggleHood(id){
+  if(selectedIds.includes(id)){
+    const rem=selectedIds.filter(x=>x!==id);
+    if(rem.length>0&&!isConnected(rem)){toast('Removing this would split the zone','err');return;}
+    selectedIds=rem;
+  } else {
+    if(selectedIds.length>0&&!adjToSelection().has(id)) return;
+    selectedIds.push(id);
+  }
+  refreshGrid();refreshSummary();onNeighbourhoodsReady();
+  document.getElementById('btn-seeker').disabled=selectedIds.length===0;
+  document.getElementById('btn-hider-join').disabled=selectedIds.length===0;
+  const hint=document.getElementById('adj-hint');
+  if(!selectedIds.length){
+    hint.innerHTML='<strong>Pick any to start.</strong> After your first pick, only adjacent neighbourhoods will be available.';
+  } else {
+    const adj=adjToSelection();
+    const names=HOODS.filter(h=>adj.has(h.id)).map(h=>h.name);
+    hint.innerHTML=`<strong>${selectedIds.length} selected.</strong> Add: ${names.length?names.join(', '):'no more available'}.`;
+  }
+}
+function refreshSummary(){
+  const el=document.getElementById('sel-summary');
+  if(!selectedIds.length){el.innerHTML='<div class="sel-empty">No neighbourhoods selected</div>';return;}
+  el.innerHTML='<div class="sel-tags">'+selectedIds.map(id=>{
+    const h=HOODS.find(x=>x.id===id);
+    return`<div class="sel-tag">${h.name}<button onclick="toggleHood('${id}')">✕</button></div>`;
+  }).join('')+'</div>';
+}
+function selectAll(){
+  selectedIds=HOODS.map(h=>h.id);
+  refreshGrid();refreshSummary();onNeighbourhoodsReady();
+  document.getElementById('btn-seeker').disabled=false;
+  document.getElementById('btn-hider-join').disabled=false;
+  document.getElementById('adj-hint').innerHTML=
+    '<strong>All 39 neighbourhoods selected.</strong> Tap any to deselect, or Deselect All to start over.';
+}
+function deselectAll(){
+  selectedIds=[];gameCode=null;
+  refreshGrid();refreshSummary();onNeighbourhoodsReady();
+  document.getElementById('btn-seeker').disabled=true;
+  document.getElementById('btn-hider-join').disabled=true;
+  document.getElementById('adj-hint').innerHTML=
+    '<strong>Pick any to start.</strong> After your first pick, only adjacent neighbourhoods will be available. Or tap Select All.';
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// MAP
+// ═══════════════════════════════════════════════════════════════════
+function initMap(){
+  if(map) return;
+  map=L.map('map',{center:CENTER,zoom:13,zoomControl:true,attributionControl:false});
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{maxZoom:19,subdomains:'abcd',attribution:'© OpenStreetMap © CARTO'}).addTo(map);
+  // Use role-appropriate marker for self
+  const selfClass=myRole==='hider'?'hider-dot':'seeker-dot';
+  const icon=L.divIcon({className:'',html:`<div class="${selfClass}"></div>`,iconSize:[18,18],iconAnchor:[9,9]});
+  seekerMarker=L.marker(myPos.lat?[myPos.lat,myPos.lng]:CENTER,{icon,zIndexOffset:1000}).addTo(map);
+  zoneGroup=L.layerGroup().addTo(map);
+  fogGroup=L.layerGroup().addTo(map);
+  // When user pans, stop auto-centering
+  map.on('dragstart',()=>{centerOnGPS=false;});
+  map.on('moveend zoomend',renderFog);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// LAUNCH (seeker)
+// ═══════════════════════════════════════════════════════════════════
+function launchGame(){
+  if(!selectedIds.length) return;
+  // Start GPS for seeker
+  startGPS('seeker');
+  if(!map) initMap();
+  activePolys=selectedIds.map(id=>({id,poly:POLY[id]}));
+  if(zoneGroup) zoneGroup.clearLayers();
+  activePolys.forEach(({poly})=>{
+    L.polygon(poly,{color:'#00e87a',weight:2,opacity:0.55,fillColor:'#00e87a',fillOpacity:0.05,dashArray:'8,5',interactive:false}).addTo(zoneGroup);
+  });
+  // Fit map to selected neighbourhoods only (not the full master boundary)
+  const allLats=activePolys.flatMap(({poly})=>poly.map(p=>p[0]));
+  const allLngs=activePolys.flatMap(({poly})=>poly.map(p=>p[1]));
+  const bounds=L.latLngBounds(
+    [Math.min(...allLats),Math.min(...allLngs)],
+    [Math.max(...allLats),Math.max(...allLngs)]
+  );
+  map.fitBounds(bounds,{padding:[60,60],maxZoom:16,animate:false});
+  const names=HOODS.filter(h=>selectedIds.includes(h.id)).map(h=>h.name);
+  document.getElementById('zone-strip').textContent=names.length<=4?names.join(' · '):`${names.slice(0,3).join(' · ')} +${names.length-3} more`;
+  document.getElementById('setup-screen').style.display='none';
+  document.getElementById('top-bar').style.display='block';
+  document.getElementById('bottom-bar').style.display='block';
+  document.getElementById('gps-btn').style.display='flex';
+  document.getElementById('role-badge').className='role-badge seeker';
+  document.getElementById('role-badge').innerHTML='<div class="pulse"></div>SEEKING';
+  document.getElementById('rejoin-btn').style.display='flex';
+  startTimer();
+  // Write initial game state to Firebase
+  if(gameCode && window._fbSet){
+    window._fbSet(`games/${gameCode}/state`,{
+      qCount:0, startedAt:gameStartTime, elimRecords:[], log:[]
+    });
+    window._fbSet(`games/${gameCode}/status`,'playing');
+  }
+  setTimeout(()=>{map.invalidateSize();renderFog();updateMatchInfo();updateTentPlaces();},100);
+
+  // Listen for hider ready signal
+  if(gameCode && window._fbListen){
+    const readyUnsub=window._fbListen(`games/${gameCode}/status`,status=>{
+      if(status==='ready'){
+        readyUnsub();
+        toast('🎯 Hider is ready — hunt begins!','go');
+        document.getElementById('role-badge').innerHTML='<div class="pulse"></div>HUNTING';
+      }
+    });
+  }
+}
+function startTimer(){
+  gameStartTime=Date.now();
+  if(timerInterval) clearInterval(timerInterval);
+  const tEl=document.getElementById('s-t');
+  if(!tEl) return;
+  timerInterval=setInterval(()=>{tEl.textContent=elapsedStr();},1000);
+}
+function exitGame(){
+  if(!confirm('End the game?')) return;
+  stopGPS();
+  if(timerInterval) clearInterval(timerInterval);
+  // Unsubscribe Firebase listener
+  if(fbUnsubscribe){fbUnsubscribe();fbUnsubscribe=null;}
+  if(typeof lastSeenInterval!=='undefined'&&lastSeenInterval){clearInterval(lastSeenInterval);lastSeenInterval=null;}
+  // Clear seeker position from Firebase on game end
+  if(gameCode && window._fbSet) window._fbSet(`games/${gameCode}`,null);
+  qCount=0;eliminations=[];refLayers=[];elimShapes=[];elimRecords=[];logEntries=[];selectedIds=[];activePolys=[];
+  if(map){zoneGroup.clearLayers();fogGroup.clearLayers();}
+  document.getElementById('top-bar').style.display='none';
+  document.getElementById('bottom-bar').style.display='none';
+  document.getElementById('hider-game-bar').style.display='none';
+  document.getElementById('gps-btn').style.display='none';
+  document.getElementById('game-stats').style.display='flex';
+  document.getElementById('setup-screen').style.display='flex';
+  refreshGrid();refreshSummary();onNeighbourhoodsReady();
+  document.getElementById('s-q').textContent='0';
+  document.getElementById('s-z').textContent='100%';
+  document.getElementById('s-t').textContent='0:00';
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// PIP + FOG
+// ═══════════════════════════════════════════════════════════════════
+function pip(lat,lng,poly){
+  let inside=false;
+  for(let i=0,j=poly.length-1;i<poly.length;j=i++){
+    const xi=poly[i][0],yi=poly[i][1],xj=poly[j][0],yj=poly[j][1];
+    if(((yi>lng)!==(yj>lng))&&(lat<(xj-xi)*(lng-yi)/(yj-yi)+xi)) inside=!inside;
+  }
+  return inside;
+}
+function inZone(lat,lng){return pip(lat,lng,MASTER_BOUNDARY);}
+function inSelectedNeighbourhood(lat,lng){return activePolys.some(({poly})=>pip(lat,lng,poly));}
+function renderFog(){
+  if(!fogGroup||!map) return;
+  fogGroup.clearLayers();
+  if(!activePolys.length){refLayers.forEach(fn=>fn());return;}
+
+  // ── THREE-LAYER FOG STRATEGY ────────────────────────────────────
+  // Layer 1: MASTER_BOUNDARY outer mask
+  //   Everything outside the entire play zone = solid dark.
+  //   Uses a GeoJSON donut so edges are pixel-perfect, no grid gaps.
+  // Layer 2: Unselected-neighbourhood overlay
+  //   Inside the master boundary but NOT in a selected neighbourhood
+  //   = semi-dark (dimmed but visible). No black patches — just fog.
+  // Layer 3: Elimination overlay
+  //   Inside selected neighbourhoods but ruled out by questions = dark.
+
+  const worldBig=[[-90,-360],[-90,360],[90,360],[90,-360],[-90,-360]];
+
+  // ── Layer 1: outer fog mask (world minus master boundary) ────────
+  const masterHole=MASTER_BOUNDARY.map(p=>[p[1],p[0]]);
+  masterHole.push(masterHole[0]);
+  L.geoJSON({type:'Feature',geometry:{type:'Polygon',
+    coordinates:[worldBig.map(p=>[p[1],p[0]]),masterHole]}},{
+    style:{fillColor:'#0d0d12',fillOpacity:0.90,color:'transparent',weight:0,interactive:false}
+  }).addTo(fogGroup);
+
+  // ── Layer 2: dim overlay for unselected neighbourhoods ───────────
+  // Draw every unselected neighbourhood as a semi-dark overlay.
+  // No centroid check — the outer fog mask (Layer 1) already handles
+  // everything outside the master boundary. Removing the centroid
+  // check fixes neighbourhoods like Museum Campus whose centroid
+  // falls outside the master boundary even though the polygon is valid.
+  HOODS.forEach(h=>{
+    if(selectedIds.includes(h.id)) return;
+    const poly=POLY[h.id];
+    if(!poly) return;
+    L.polygon(poly,{
+      fillColor:'#0a0a10',fillOpacity:0.75,
+      color:'rgba(0,232,122,0.12)',weight:0.5,
+      interactive:false
+    }).addTo(fogGroup);
+  });
+
+  // ── Layer 3: elimination overlay ───────────────────────────────────
+  // Uses GeoJSON donut polygons for pixel-perfect curved edges.
+  // Each elimination shape is drawn as a filled overlay, not a grid.
+  // elimShapes[] is populated by question handlers (doRadar, etc.)
+  // with GeoJSON-ready polygon coordinates for smooth rendering.
+  elimShapes.forEach(shape=>{
+    L.geoJSON(shape,{
+      style:{fillColor:'#0d0d12',fillOpacity:0.86,color:'transparent',weight:0,interactive:false}
+    }).addTo(fogGroup);
+  });
+
+  // ── Selected neighbourhood outlines ─────────────────────────────
+  activePolys.forEach(({poly})=>{
+    L.polygon(poly,{color:'#00e87a',weight:1.5,opacity:0.5,fill:false,interactive:false,dashArray:'5,4'}).addTo(fogGroup);
+  });
+
+  // ── Outer master boundary outline ───────────────────────────────
+  L.polygon(MASTER_BOUNDARY,{color:'#00e87a',weight:1.5,opacity:0.3,fill:false,interactive:false}).addTo(fogGroup);
+
+  // ── Reference layers (question markers, circles, lines) ─────────
+  refLayers.forEach(fn=>fn());
+}
+function zonePct(){
+  if(!eliminations.length||!activePolys.length) return 100;
+  const N=1500;let active=0;
+  const latR=[Math.min(...MASTER_BOUNDARY.map(p=>p[0])),Math.max(...MASTER_BOUNDARY.map(p=>p[0]))];
+  const lngR=[Math.min(...MASTER_BOUNDARY.map(p=>p[1])),Math.max(...MASTER_BOUNDARY.map(p=>p[1]))];
+  for(let i=0;i<N;i++){
+    const lat=latR[0]+Math.random()*(latR[1]-latR[0]),lng=lngR[0]+Math.random()*(lngR[1]-lngR[0]);
+    if(!inZone(lat,lng)) continue;
+    let e=false;for(const fn of eliminations){if(fn(lat,lng)){e=true;break;}}
+    if(!e) active++;
+  }
+  return Math.round(active/N*100);
+}
+function addRef(fn){refLayers.push(fn);}
+function zonePlaces(type){return(PLACES[type]||[]).filter(p=>p.hood===null||selectedIds.includes(p.hood));}
+function distMi(a1,o1,a2,o2){
+  const R=3959,dA=(a2-a1)*Math.PI/180,dO=(o2-o1)*Math.PI/180;
+  const x=Math.sin(dA/2)**2+Math.cos(a1*Math.PI/180)*Math.cos(a2*Math.PI/180)*Math.sin(dO/2)**2;
+  return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
+}
+function nearestOf(lat,lng,type){
+  const pl=zonePlaces(type);if(!pl.length) return null;
+  let best=null,bd=Infinity;
+  pl.forEach(p=>{const d=distMi(lat,lng,p.lat,p.lng);if(d<bd){bd=d;best=p;}});
+  return{place:best,dist:bd};
+}
+function within(lat,lng,type,mi){
+  return zonePlaces(type).map(p=>({...p,dist:distMi(lat,lng,p.lat,p.lng)})).filter(p=>p.dist<=mi).sort((a,b)=>a.dist-b.dist);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// QUESTION HANDLERS
+// ═══════════════════════════════════════════════════════════════════
+// Generate a GeoJSON polygon approximating a circle (128 sides = smooth)
+function circleGeoJSON(lat,lng,radiusMi){
+  const R=3959,pts=128;
+  const coords=[];
+  for(let i=0;i<=pts;i++){
+    const angle=(i/pts)*2*Math.PI;
+    const dLat=(radiusMi/R)*(180/Math.PI);
+    const dLng=(radiusMi/R)*(180/Math.PI)/Math.cos(lat*Math.PI/180);
+    coords.push([lng+dLng*Math.sin(angle), lat+dLat*Math.cos(angle)]);
+  }
+  return coords;
+}
+
+// GeoJSON donut: world bbox minus circle = darkens OUTSIDE the circle
+function outsideCircleGeoJSON(lat,lng,radiusMi){
+  const world=[[-180,-90],[180,-90],[180,90],[-180,90],[-180,-90]];
+  const circle=circleGeoJSON(lat,lng,radiusMi);
+  return {type:'Feature',geometry:{type:'Polygon',coordinates:[world,circle]}};
+}
+
+// GeoJSON filled circle = darkens INSIDE the circle
+function insideCircleGeoJSON(lat,lng,radiusMi){
+  const circle=circleGeoJSON(lat,lng,radiusMi);
+  return {type:'Feature',geometry:{type:'Polygon',coordinates:[circle]}};
+}
+
+function doRadar(yes){
+  const d=+document.getElementById('r-dist').value,sL=myPos.lat,sN=myPos.lng;
+  if(yes){
+    // YES — inside circle: eliminate everything OUTSIDE the circle
+    eliminations.push((a,o)=>distMi(sL,sN,a,o)>d);
+    elimShapes.push(outsideCircleGeoJSON(sL,sN,d));
+    elimRecords.push({type:'radar',sLat:sL,sLng:sN,distMi:d,inside:true});
+    addRef(()=>L.circle([sL,sN],{radius:d*M2M,color:'#00e87a',weight:1.5,opacity:0.6,fillOpacity:0,dashArray:'7,4',interactive:false}).addTo(fogGroup));
+    log('radar',`Within ${d} mi — YES. Outside eliminated.`);
+  } else {
+    // NO — not inside: eliminate everything INSIDE the circle
+    eliminations.push((a,o)=>distMi(sL,sN,a,o)<=d);
+    elimShapes.push(insideCircleGeoJSON(sL,sN,d));
+    elimRecords.push({type:'radar',sLat:sL,sLng:sN,distMi:d,inside:false});
+    addRef(()=>L.circle([sL,sN],{radius:d*M2M,color:'#ff4060',weight:1.5,opacity:0.6,fillOpacity:0,dashArray:'7,4',interactive:false}).addTo(fogGroup));
+    log('radar',`Within ${d} mi — NO. Inside eliminated.`);
+  }
+  onAnswer();
+}
+function updateMatchInfo(){
+  if(myRole!=='seeker') return;
+  const type=document.getElementById('m-type').value,typeName=document.getElementById('m-type').selectedOptions[0].text;
+  const nearest=nearestOf(myPos.lat,myPos.lng,type),places=zonePlaces(type);
+  if(!nearest){document.getElementById('match-info').innerHTML=`<div class="warn-box">No ${typeName} in zone.</div>`;return;}
+  const plist=places.map(p=>{const d=distMi(myPos.lat,myPos.lng,p.lat,p.lng).toFixed(1);const tag=p.name===nearest.place.name?`<span class="nearest-tag">YOURS</span>`:'';return`${p.name} (${d}mi)${tag}`;}).join(' · ');
+  document.getElementById('match-info').innerHTML=`<div class="info-box info-match"><strong>Your nearest ${typeName}:</strong> ${nearest.place.name} (${nearest.dist.toFixed(2)} mi)<div class="plist">${plist}</div></div>`;
+}
+// Build a GeoJSON MultiPolygon from a grid of eliminated cells
+// Used by Matching and Tentacles (Voronoi) where the shape can't be
+// expressed as a simple geometric formula
+function buildElimShape(elimFn){
+  // Sample the master boundary bounding box at fine resolution
+  const lats=MASTER_BOUNDARY.map(p=>p[0]);
+  const lngs=MASTER_BOUNDARY.map(p=>p[1]);
+  const latMin=Math.min(...lats),latMax=Math.max(...lats);
+  const lngMin=Math.min(...lngs),lngMax=Math.max(...lngs);
+  const steps=120; // 120x120 = 14400 cells, ~100m each — smooth enough
+  const dLat=(latMax-latMin)/steps;
+  const dLng=(lngMax-lngMin)/steps;
+  const polygons=[];
+  for(let r=0;r<steps;r++){
+    for(let c=0;c<steps;c++){
+      const lat=latMin+r*dLat+dLat/2;
+      const lng=lngMin+c*dLng+dLng/2;
+      if(!pip(lat,lng,MASTER_BOUNDARY)) continue;
+      if(!inSelectedNeighbourhood(lat,lng)) continue;
+      if(!elimFn(lat,lng)) continue;
+      // This cell is eliminated — add as a tiny rectangle polygon
+      const s=latMin+r*dLat, n=s+dLat;
+      const w=lngMin+c*dLng, e=w+dLng;
+      polygons.push([[[w,s],[e,s],[e,n],[w,n],[w,s]]]);
+    }
+  }
+  if(!polygons.length) return null;
+  return {type:'Feature',geometry:{type:'MultiPolygon',coordinates:polygons}};
+}
+
+// Half-plane GeoJSON: darkens one side of a line through (mLat,mLng)
+// with normal vector (nLat,nLng). side=1 darkens where dot>0, -1 where dot<0
+function halfPlaneGeoJSON(mLat,mLng,nLat,nLng,side){
+  // Build a huge rectangle on the eliminated side
+  // Extend far enough to cover any viewport
+  const ext=5; // degrees — far beyond any visible area
+  // Perpendicular direction
+  const pLat=-nLng, pLng=nLat;
+  // The bisector line passes through (mLat,mLng) with direction (pLat,pLng)
+  // Two points on the bisector line (extended far)
+  const p1=[mLat+pLat*ext, mLng+pLng*ext];
+  const p2=[mLat-pLat*ext, mLng-pLng*ext];
+  // The eliminated half is on the 'side' side of the line
+  // Normal points toward the KEPT side, so we go opposite for eliminated
+  const offLat=-nLat*side*ext;
+  const offLng=-nLng*side*ext;
+  // Build quad: p1 -> p2 -> p2+offset -> p1+offset
+  const coords=[
+    [p1[1],p1[0]],
+    [p2[1],p2[0]],
+    [p2[1]+offLng,p2[0]+offLat],
+    [p1[1]+offLng,p1[0]+offLat],
+    [p1[1],p1[0]]
+  ];
+  return {type:'Feature',geometry:{type:'Polygon',coordinates:[coords]}};
+}
+
+function doMatch(same){
+  const type=document.getElementById('m-type').value,typeName=document.getElementById('m-type').selectedOptions[0].text;
+  const nearest=nearestOf(myPos.lat,myPos.lng,type);if(!nearest) return;
+  const sn=nearest.place;
+  addRef(()=>{zonePlaces(type).forEach(p=>{L.circleMarker([p.lat,p.lng],{radius:p.name===sn.name?7:4,color:'#a78bfa',fillColor:p.name===sn.name?'#a78bfa':'#6d28d9',fillOpacity:p.name===sn.name?0.9:0.4,weight:1,interactive:false}).addTo(fogGroup);});});
+  let elimFn;
+  if(same){
+    elimFn=(lat,lng)=>{const n=nearestOf(lat,lng,type);return n&&n.place.name!==sn.name;};
+    eliminations.push(elimFn);
+    elimRecords.push({type:'match',placeType:type,placeName:sn.name,same:true});
+    log('match',`Nearest ${typeName} SAME (${sn.name}).`);
+  } else {
+    elimFn=(lat,lng)=>{const n=nearestOf(lat,lng,type);return n&&n.place.name===sn.name;};
+    eliminations.push(elimFn);
+    elimRecords.push({type:'match',placeType:type,placeName:sn.name,same:false});
+    log('match',`Nearest ${typeName} DIFFERENT.`);
+  }
+  const shape=buildElimShape(elimFn);
+  if(shape) elimShapes.push(shape);
+  onAnswer();
+}
+
+function doMeasure(ans){
+  const v=document.getElementById('lm-sel').value,nm=document.getElementById('lm-sel').selectedOptions[0].text;
+  const [la,lo]=v.split(',').map(Number),sd=distMi(myPos.lat,myPos.lng,la,lo);
+  addRef(()=>{
+    L.circleMarker([la,lo],{radius:6,color:'#f0e030',fillColor:'#f0e030',fillOpacity:0.9,weight:0,interactive:false}).addTo(fogGroup);
+    L.circle([la,lo],{radius:sd*M2M,color:'#f0e030',weight:1.5,opacity:0.5,fillOpacity:0,dashArray:'6,4',interactive:false}).addTo(fogGroup);
+  });
+  // The bisector is a circle centred on the landmark at distance sd from seeker
+  // We approximate with a half-plane through the midpoint between seeker and landmark
+  // Normal vector points from landmark toward seeker (kept side = closer to landmark)
+  const mLat=(myPos.lat+la)/2, mLng=(myPos.lng+lo)/2;
+  const dLat=myPos.lat-la, dLng=myPos.lng-lo;
+  const mag=Math.sqrt(dLat*dLat+dLng*dLng);
+  const nLat=dLat/mag, nLng=dLng/mag;
+  if(ans==='closer'){
+    // Keep closer side (toward landmark) — eliminate far side
+    // Far side is where dot product with normal (toward seeker) is positive
+    eliminations.push((a,o)=>distMi(a,o,la,lo)>=sd);
+    elimShapes.push(halfPlaneGeoJSON(mLat,mLng,nLat,nLng,1));
+    elimRecords.push({type:'measure',la,lo,landmarkName:nm,sd,sLat:myPos.lat,sLng:myPos.lng,ans:'closer'});
+    log('measure',`Closer to ${nm}. Far side eliminated.`);
+  } else {
+    // Keep far side — eliminate near side (toward landmark)
+    eliminations.push((a,o)=>distMi(a,o,la,lo)<sd);
+    elimShapes.push(halfPlaneGeoJSON(mLat,mLng,nLat,nLng,-1));
+    elimRecords.push({type:'measure',la,lo,landmarkName:nm,sd,sLat:myPos.lat,sLng:myPos.lng,ans:'further'});
+    log('measure',`Further from ${nm}. Near side eliminated.`);
+  }
+  onAnswer();
+}
+function startPin(which){
+  if(pinClick) map.off('click',pinClick);
+  pinMode=which;
+  document.getElementById('pin-a-btn').classList.toggle('pinned',which==='A');
+  document.getElementById('pin-b-btn').classList.toggle('pinned',which==='B');
+  pinClick=function(e){
+    const{lat,lng}=e.latlng;
+    if(pinMarkers[which]) map.removeLayer(pinMarkers[which]);
+    pinMarkers[which]=L.marker([lat,lng],{icon:L.divIcon({className:'',html:`<div class="pin-${which.toLowerCase()}-dot"></div>`,iconSize:[13,13],iconAnchor:[6,6]})}).addTo(map);
+    if(which==='A') pinA={lat,lng};else pinB={lat,lng};
+    document.getElementById(`pin-${which.toLowerCase()}-btn`).textContent=`${which}: ${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+    document.getElementById(`pin-${which.toLowerCase()}-btn`).classList.remove('pinned');
+    map.off('click',pinClick);pinClick=null;pinMode=null;refreshThermoUI();
+  };
+  map.on('click',pinClick);refreshThermoUI();
+}
+function refreshThermoUI(){
+  const box=document.getElementById('thermo-info'),hb=document.getElementById('btn-hot'),cb=document.getElementById('btn-cold');
+  if(pinA&&pinB){const d=distMi(pinA.lat,pinA.lng,pinB.lat,pinB.lng);box.innerHTML=`<div class="info-box info-thermo"><strong>Travel:</strong> ${d.toFixed(2)} mi<br><span class="coord-txt">A → B</span></div>`;hb.disabled=false;cb.disabled=false;}
+  else{box.innerHTML=`<div class="info-box info-thermo">${pinA?'Now tap map for Pin B.':pinB?'Now tap map for Pin A.':pinMode?`Tap the map to place Point ${pinMode}.`:''}</div>`;hb.disabled=true;cb.disabled=true;}
+}
+function doThermo(ans){
+  if(!pinA||!pinB) return;
+  const A=pinA,B=pinB,d=distMi(A.lat,A.lng,B.lat,B.lng);
+  const mLat=(A.lat+B.lat)/2,mLng=(A.lng+B.lng)/2;
+  const dLat=B.lat-A.lat,dLng=B.lng-A.lng,mag=Math.sqrt(dLat*dLat+dLng*dLng);
+  const nLat=dLat/mag,nLng=dLng/mag,col=ans==='hotter'?'#ff6b35':'#38bdf8';
+  addRef(()=>{
+    L.polyline([[A.lat,A.lng],[B.lat,B.lng]],{color:col,weight:2.5,opacity:0.7,interactive:false}).addTo(fogGroup);
+    L.circleMarker([A.lat,A.lng],{radius:4,color:'#ff6b35',fillColor:'#ff6b35',fillOpacity:0.8,weight:0,interactive:false}).addTo(fogGroup);
+    L.circleMarker([B.lat,B.lng],{radius:4,color:'#38bdf8',fillColor:'#38bdf8',fillOpacity:0.8,weight:0,interactive:false}).addTo(fogGroup);
+  });
+  if(ans==='hotter'){
+    eliminations.push((lat,lng)=>(lat-mLat)*nLat+(lng-mLng)*nLng<0);
+    elimShapes.push(halfPlaneGeoJSON(mLat,mLng,nLat,nLng,-1));
+    elimRecords.push({type:'thermo',aLat:A.lat,aLng:A.lng,bLat:B.lat,bLng:B.lng,ans:'hotter'});
+    log('thermo',`A→B (${d.toFixed(1)}mi) — HOTTER. Behind bisector eliminated.`);
+  } else {
+    eliminations.push((lat,lng)=>(lat-mLat)*nLat+(lng-mLng)*nLng>=0);
+    elimShapes.push(halfPlaneGeoJSON(mLat,mLng,nLat,nLng,1));
+    elimRecords.push({type:'thermo',aLat:A.lat,aLng:A.lng,bLat:B.lat,bLng:B.lng,ans:'colder'});
+    log('thermo',`A→B (${d.toFixed(1)}mi) — COLDER. Ahead of bisector eliminated.`);
+  }
+  ['A','B'].forEach(w=>{if(pinMarkers[w]){map.removeLayer(pinMarkers[w]);pinMarkers[w]=null;}});
+  pinA=null;pinB=null;
+  document.getElementById('pin-a-btn').textContent='📍 Pin A — Start';
+  document.getElementById('pin-b-btn').textContent='📍 Pin B — Now';
+  document.getElementById('thermo-info').innerHTML='';
+  document.getElementById('btn-hot').disabled=true;document.getElementById('btn-cold').disabled=true;
+  onAnswer();
+}
+function updateTentPlaces(){
+  if(myRole!=='seeker') return;
+  const type=document.getElementById('t-type').value,nearby=within(myPos.lat,myPos.lng,type,1.0);
+  const g=document.getElementById('tent-grid');pickedTent=null;
+  if(!nearby.length){g.innerHTML=`<div class="no-places">No ${type} within 1 mile in zone.</div>`;return;}
+  g.innerHTML=nearby.map((p,i)=>`<button class="tent-btn" onclick="pickTent(${i})">${p.name} <span style="opacity:0.5;font-size:10px">(${p.dist.toFixed(2)}mi)</span></button>`).join('');
+  g._places=nearby;
+}
+function pickTent(idx){const g=document.getElementById('tent-grid');pickedTent=g._places[idx];g.querySelectorAll('.tent-btn').forEach((b,i)=>b.classList.toggle('on',i===idx));}
+function doTentacles(){
+  if(!pickedTent){toast('Tap the place first','err');return;}
+  const p=pickedTent,type=document.getElementById('t-type').value,typeName=document.getElementById('t-type').selectedOptions[0].text;
+  addRef(()=>L.circleMarker([p.lat,p.lng],{radius:7,color:'#38bdf8',fillColor:'#38bdf8',fillOpacity:0.9,weight:2,interactive:false}).addTo(fogGroup));
+  const tentElimFn=(lat,lng)=>{const n=nearestOf(lat,lng,type);return n&&n.place.name!==p.name;};
+  eliminations.push(tentElimFn);
+  const tentShape=buildElimShape(tentElimFn);
+  if(tentShape) elimShapes.push(tentShape);
+  elimRecords.push({type:'tentacles',placeType:type,placeName:p.name});
+  log('tent',`Closest ${typeName}: "${p.name}".`);
+  pickedTent=null;updateTentPlaces();onAnswer();
+}
+
+// ── STATE PERSISTENCE ────────────────────────────────────────────
+
+function saveGameState(){
+  if(!gameCode||!window._fbSet) return;
+  window._fbSet(`games/${gameCode}/state`,{
+    qCount,
+    startedAt: gameStartTime,
+    elimRecords,
+    log: logEntries,
+  });
+}
+
+function replayElimination(rec){
+  // Rebuild elimination function and visual shape from a serialised record
+  let fn, shape;
+  switch(rec.type){
+    case 'radar':
+      fn = rec.inside
+        ? (a,o)=>distMi(rec.sLat,rec.sLng,a,o)>rec.distMi
+        : (a,o)=>distMi(rec.sLat,rec.sLng,a,o)<=rec.distMi;
+      shape = rec.inside
+        ? outsideCircleGeoJSON(rec.sLat,rec.sLng,rec.distMi)
+        : insideCircleGeoJSON(rec.sLat,rec.sLng,rec.distMi);
+      addRef(()=>{
+        const col=rec.inside?'#00e87a':'#ff4060';
+        L.circle([rec.sLat,rec.sLng],{radius:rec.distMi*M2M,color:col,weight:1.5,opacity:0.6,fillOpacity:0,dashArray:'7,4',interactive:false}).addTo(fogGroup);
+      });
+      break;
+    case 'match':{
+      const pType=rec.placeType, pName=rec.placeName, same=rec.same;
+      fn = same
+        ? (lat,lng)=>{const n=nearestOf(lat,lng,pType);return n&&n.place.name!==pName;}
+        : (lat,lng)=>{const n=nearestOf(lat,lng,pType);return n&&n.place.name===pName;};
+      shape = buildElimShape(fn);
+      addRef(()=>{zonePlaces(pType).forEach(p=>{L.circleMarker([p.lat,p.lng],{radius:p.name===pName?7:4,color:'#a78bfa',fillColor:p.name===pName?'#a78bfa':'#6d28d9',fillOpacity:p.name===pName?0.9:0.4,weight:1,interactive:false}).addTo(fogGroup);});});
+      break;
+    }
+    case 'measure':{
+      const {la,lo,sd,ans,sLat,sLng}=rec;
+      const mLat=(sLat+la)/2,mLng=(sLng+lo)/2;
+      const dLat=sLat-la,dLng=sLng-lo,mag=Math.sqrt(dLat*dLat+dLng*dLng);
+      const nLat=dLat/mag,nLng=dLng/mag;
+      fn = ans==='closer'
+        ? (a,o)=>distMi(a,o,la,lo)>=sd
+        : (a,o)=>distMi(a,o,la,lo)<sd;
+      shape = halfPlaneGeoJSON(mLat,mLng,nLat,nLng,ans==='closer'?1:-1);
+      addRef(()=>{
+        L.circleMarker([la,lo],{radius:6,color:'#f0e030',fillColor:'#f0e030',fillOpacity:0.9,weight:0,interactive:false}).addTo(fogGroup);
+        L.circle([la,lo],{radius:sd*M2M,color:'#f0e030',weight:1.5,opacity:0.5,fillOpacity:0,dashArray:'6,4',interactive:false}).addTo(fogGroup);
+      });
+      break;
+    }
+    case 'thermo':{
+      const {aLat,aLng,bLat,bLng,ans}=rec;
+      const mLat=(aLat+bLat)/2,mLng=(aLng+bLng)/2;
+      const dLat=bLat-aLat,dLng=bLng-aLng,mag=Math.sqrt(dLat*dLat+dLng*dLng);
+      const nLat=dLat/mag,nLng=dLng/mag;
+      fn = ans==='hotter'
+        ? (lat,lng)=>(lat-mLat)*nLat+(lng-mLng)*nLng<0
+        : (lat,lng)=>(lat-mLat)*nLat+(lng-mLng)*nLng>=0;
+      shape = halfPlaneGeoJSON(mLat,mLng,nLat,nLng,ans==='hotter'?-1:1);
+      const col=ans==='hotter'?'#ff6b35':'#38bdf8';
+      addRef(()=>{
+        L.polyline([[aLat,aLng],[bLat,bLng]],{color:col,weight:2.5,opacity:0.7,interactive:false}).addTo(fogGroup);
+        L.circleMarker([aLat,aLng],{radius:4,color:'#ff6b35',fillColor:'#ff6b35',fillOpacity:0.8,weight:0,interactive:false}).addTo(fogGroup);
+        L.circleMarker([bLat,bLng],{radius:4,color:'#38bdf8',fillColor:'#38bdf8',fillOpacity:0.8,weight:0,interactive:false}).addTo(fogGroup);
+      });
+      break;
+    }
+    case 'tentacles':{
+      const {placeType,placeName}=rec;
+      fn=(lat,lng)=>{const n=nearestOf(lat,lng,placeType);return n&&n.place.name!==placeName;};
+      shape=buildElimShape(fn);
+      const pl=zonePlaces(placeType).find(p=>p.name===placeName);
+      if(pl) addRef(()=>L.circleMarker([pl.lat,pl.lng],{radius:7,color:'#38bdf8',fillColor:'#38bdf8',fillOpacity:0.9,weight:2,interactive:false}).addTo(fogGroup));
+      break;
+    }
+  }
+  if(fn) eliminations.push(fn);
+  if(shape) elimShapes.push(shape);
+}
+
+async function restoreGameState(code){
+  // Try to restore game state from Firebase
+  return new Promise(resolve=>{
+    if(!window._fbListen){resolve(false);return;}
+    const unsub=window._fbListen(`games/${code}/state`,state=>{
+      unsub();
+      if(!state){resolve(false);return;}
+      // Restore timer
+      gameStartTime=state.startedAt||Date.now();
+      // Restore log
+      logEntries=state.log||[];
+      document.getElementById('log-badge').textContent=logEntries.length;
+      document.getElementById('log-body').innerHTML=logEntries.map(e=>
+        `<div class="log-entry"><span class="lt ${e.type}">${e.type}</span>${e.text}<span style="color:var(--muted);float:right">${e.time}</span></div>`
+      ).join('');
+      // Replay eliminations
+      const recs=state.elimRecords||[];
+      recs.forEach(rec=>replayElimination(rec));
+      elimRecords=recs;
+      // Restore question count
+      qCount=state.qCount||0;
+      document.getElementById('s-q').textContent=qCount;
+      resolve(true);
+    });
+  });
+}
+
+function onAnswer(){qCount++;document.getElementById('s-q').textContent=qCount;document.getElementById('s-z').textContent=zonePct()+'%';renderFog();saveGameState();}
+function log(type,text){
+  logEntries.unshift({type,text,time:elapsedStr()});
+  document.getElementById('log-badge').textContent=logEntries.length;
+  document.getElementById('log-body').innerHTML=logEntries.map(e=>`<div class="log-entry"><span class="lt ${e.type}">${e.type}</span>${e.text}<span style="color:var(--muted);float:right">${e.time}</span></div>`).join('');
+}
+function elapsedStr(){if(!gameStartTime) return'0:00';const s=Math.floor((Date.now()-gameStartTime)/1000);return`${Math.floor(s/60)}:${(s%60).toString().padStart(2,'0')}`;}
+function toggleLog(){logOpen=!logOpen;document.getElementById('intel-log').classList.toggle('open',logOpen);document.getElementById('log-btn').style.display=logOpen?'none':'flex';}
+function switchTab(t){
+  if(t!=='thermo'&&pinClick){map.off('click',pinClick);pinClick=null;pinMode=null;document.getElementById('pin-a-btn').classList.remove('pinned');document.getElementById('pin-b-btn').classList.remove('pinned');}
+  document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
+  ['radar','match','measure','thermo','tent'].forEach(x=>document.getElementById('q-'+x).style.display=x===t?'block':'none');
+  if(t==='match') updateMatchInfo();if(t==='tent') updateTentPlaces();
+}
+
+// Toast helper
+let toastTimer=null;
+function toast(msg,kind=''){
+  const el=document.getElementById('toast');
+  el.textContent=msg;
+  el.className='toast show '+kind;
+  if(toastTimer) clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>{el.className='toast '+kind;},2400);
+}
+
+// Auto-join from URL ?join=ABCDEF
+function checkUrlJoin(){
+  const params=new URLSearchParams(location.search);
+  const code=params.get('join');
+  const role=params.get('role'); // 'seeker' or 'hider'
+  if(code){
+    const cleaned=code.toUpperCase().replace(/[^A-Z0-9]/g,'');
+    if(role==='seeker'){
+      // Seeker rejoining — restore game state
+      rejoinAsSeeker(cleaned);
+    } else {
+      // Default: hider joining
+      myRole='hider';
+      loadGameAndShowHider(cleaned);
+    }
+  }
+}
+
+async function rejoinAsSeeker(code){
+  myRole='seeker';
+  gameCode=code;
+  // Load config first
+  if(!window._fbListen){toast('Firebase not ready','err');return;}
+  const configUnsub=window._fbListen(`games/${code}/config`,async config=>{
+    configUnsub();
+    if(!config){toast('Game not found','err');return;}
+    selectedIds=config.neighbourhoods||[];
+    activePolys=selectedIds.map(id=>({id,poly:POLY[id]}));
+    // Hide setup, show game UI
+    document.getElementById('setup-screen').style.display='none';
+    document.getElementById('top-bar').style.display='block';
+    document.getElementById('bottom-bar').style.display='block';
+    document.getElementById('gps-btn').style.display='flex';
+    document.getElementById('role-badge').className='role-badge seeker';
+    document.getElementById('role-badge').innerHTML='<div class="pulse"></div>SEEKING';
+    const names=HOODS.filter(h=>selectedIds.includes(h.id)).map(h=>h.name);
+    document.getElementById('zone-strip').textContent=
+      names.length<=4?names.join(' · '):`${names.slice(0,3).join(' · ')} +${names.length-3} more`;
+    if(!map) initMap();
+    // Draw zone borders
+    activePolys.forEach(({poly})=>{
+      L.polygon(poly,{color:'#00e87a',weight:2,opacity:0.55,fillColor:'#00e87a',fillOpacity:0.05,dashArray:'8,5',interactive:false}).addTo(zoneGroup);
+    });
+    // Restore game state (eliminations, log, timer)
+    const restored=await restoreGameState(code);
+    if(restored){
+      toast('Game restored ✓','go');
+    }
+    setTimeout(()=>{map.invalidateSize();renderFog();updateMatchInfo();updateTentPlaces();},100);
+    // Restart GPS
+    startGPS('seeker');
+    // Restart timer from saved startedAt
+    if(timerInterval) clearInterval(timerInterval);
+    timerInterval=setInterval(()=>document.getElementById('s-t').textContent=elapsedStr(),1000);
+    document.getElementById('s-z').textContent=zonePct()+'%';
+  });
+}
+
+window.addEventListener('DOMContentLoaded',()=>{
+  buildGrid();
+  refreshGrid();
+  // Show setup screen by default (neighbourhood selection is always first)
+  const params=new URLSearchParams(location.search);
+  if(params.get('join')){
+    // Hider joining via link — checkUrlJoin handles this
+    checkUrlJoin();
+  } else {
+    // Default: show setup screen
+    document.getElementById('role-screen').style.display='none';
+    document.getElementById('setup-screen').style.display='flex';
+  }
+});
+</script>
+</body>
+</html>
