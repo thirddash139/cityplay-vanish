@@ -180,6 +180,9 @@ body{background:var(--ink);color:var(--txt);font-family:'DM Sans',sans-serif;ove
 #keep-popup-confirm:disabled{opacity:0.4;cursor:not-allowed;}
 #keep-popup-close{position:absolute;top:16px;right:16px;background:none;border:none;color:#8a8a96;font-size:16px;cursor:pointer;line-height:1;padding:0;}
 #seeker-curse-overlay{display:none;position:fixed;inset:0;z-index:6000;background:rgba(8,4,24,0.94);flex-direction:column;align-items:center;justify-content:center;text-align:center;}
+#detour-picker{display:none;position:fixed;inset:0;z-index:7000;background:rgba(8,4,24,0.97);flex-direction:column;align-items:center;justify-content:center;text-align:center;}
+.detour-dir-btn{width:90px;height:68px;border-radius:10px;border:1px solid rgba(249,115,22,0.35);background:rgba(249,115,22,0.1);color:#f97316;font-family:'Space Mono',monospace;font-size:13px;font-weight:500;cursor:pointer;touch-action:manipulation;}
+.detour-dir-btn:active{background:rgba(249,115,22,0.25);}
 #keep-popup-discard{margin-top:14px;border-top:1px solid #3a3a44;padding-top:12px;}
 #keep-popup-discard-lbl{font-size:11px;color:#8a8a96;margin-bottom:8px;}
 #keep-popup-hand-pills{display:flex;flex-wrap:wrap;gap:6px;}
@@ -242,7 +245,7 @@ body{background:var(--ink);color:var(--txt);font-family:'DM Sans',sans-serif;ove
 .tab.on{color:var(--go);background:rgba(0,232,122,0.06);}
 .qb{padding:13px 15px 16px;overflow-y:auto;-webkit-overflow-scrolling:touch;}
 #q-panel.veto-active .tabs,#q-panel.veto-active .qb{display:none!important;}
-#q-panel.static-wait .tabs,#q-panel.static-wait .qb{display:none!important;}
+#q-panel.delay-wait .tabs,#q-panel.delay-wait .qb{display:none!important;}
 #q-panel.asking .tabs,#q-panel.asking .qb{display:none!important;}
 .ask-row{display:none;}
 #q-panel.online-seeker .arow{display:none!important;}
@@ -458,9 +461,9 @@ body{background:var(--ink);color:var(--txt);font-family:'DM Sans',sans-serif;ove
       <div style="font-size:10px;color:#8a8a96;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Question sent</div>
       <div style="font-size:15px;color:#e8e8ee;font-weight:500;">Waiting for answer…</div>
     </div>
-    <div id="seeker-static-countdown" style="display:none;padding:16px;text-align:center;">
-      <div style="font-size:10px;color:#8a8a96;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">〰️ Static active</div>
-      <div style="font-size:22px;color:#e8e8ee;font-weight:500;font-family:'Space Mono',monospace;" id="seeker-static-timer">3:00</div>
+    <div id="seeker-delay-countdown" style="display:none;padding:16px;text-align:center;">
+      <div style="font-size:10px;color:#8a8a96;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">〰️ Delay active</div>
+      <div style="font-size:22px;color:#e8e8ee;font-weight:500;font-family:'Space Mono',monospace;" id="seeker-delay-timer">3:00</div>
       <div style="font-size:12px;color:#8a8a96;margin-top:4px;">Answer incoming…</div>
     </div>
     <div class="tabs">
@@ -577,6 +580,17 @@ body{background:var(--ink);color:var(--txt);font-family:'DM Sans',sans-serif;ove
       <div id="keep-popup-discard-lbl">Your hand is full — choose a card to discard</div>
       <div id="keep-popup-hand-pills"></div>
     </div>
+  </div>
+</div>
+
+<div id="detour-picker">
+  <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#f97316;margin-bottom:10px;">DETOUR DIRECTION</div>
+  <div style="font-size:14px;color:#8a8a96;margin-bottom:24px;max-width:240px;line-height:1.5;">Seeker must walk ¼ mile this way before continuing.</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+    <button class="detour-dir-btn" onclick="applyDetour('North')">↑<br>North</button>
+    <button class="detour-dir-btn" onclick="applyDetour('East')">→<br>East</button>
+    <button class="detour-dir-btn" onclick="applyDetour('South')">↓<br>South</button>
+    <button class="detour-dir-btn" onclick="applyDetour('West')">←<br>West</button>
   </div>
 </div>
 
@@ -1239,13 +1253,18 @@ const CARD_POOL=[
   {name:'Freeze',   category:'Movement',icon:'❄️', description:'Seekers must stand completely still. Their map stays live but they cannot move.'},
   {name:'Detour',   category:'Movement',icon:'🔀', description:'Point a direction — seekers must walk ¼ mile that way before resuming the hunt.'},
   {name:'Time Add', category:'Score',   icon:'⏱️', description:'Bank +5 minutes onto your final hiding score. Plays instantly, no effect on seekers.'},
-  {name:'Static',   category:'Jam',     icon:'〰️', description:"The next question's answer is delayed 3 minutes. The hider answers immediately; the seeker waits."},
+  {name:'Delay',    category:'Jam',     icon:'〰️', description:"The next question's answer is delayed 3 minutes. The hider answers immediately; the seeker waits."},
   {name:'Veto',     category:'Counter', icon:'🛡️', description:'Reject an incoming question. The seeker re-asks (you draft 2 cards) or asks a different one.'},
 ];
 let _keepCard=null,_keepDiscardIdx=null;
 let _playCardRef=null,_playCardIdx=null,hiderCurseInterval=null;
 let vetoedQuestion=null,prizePicks=1,_keepPillIdx=null;
-let staticActive=false,seekerStaticInterval=null,seekerCurseInterval=null,seekerCursed=false;
+let delayActive=false,seekerDelayInterval=null,seekerCurseInterval=null,seekerCursed=false;
+let detourActive=false,detourOrigin=null,detourDirection=null,detourPingInterval=null;
+let sendSeekerPingFn=null;
+let lieReversalTimer=null;
+let _currentHiderQ=null,_currentQTruth=null,_liePlayed=false;
+let hiderActiveCurse=false;
 let seekerHiderMarker=null,lastSeenTs=null,lastSeenInterval=null;
 let lastSeekerPingPos=null,seekerPingInterval=null;
 const deviceId=(()=>{let id=localStorage.getItem('cvDeviceId');if(!id){id=crypto.randomUUID();localStorage.setItem('cvDeviceId',id);}return id;})();
@@ -1290,8 +1309,12 @@ function backToRole(){
   if(lastSeenInterval){clearInterval(lastSeenInterval);lastSeenInterval=null;}
   if(seekerHiderMarker){seekerHiderMarker.remove();seekerHiderMarker=null;}
   lastSeenTs=null;lastSeekerPingPos=null;
-  staticActive=false;prizePicks=1;
-  if(seekerStaticInterval){clearInterval(seekerStaticInterval);seekerStaticInterval=null;}
+  delayActive=false;prizePicks=1;hiderActiveCurse=false;
+  if(seekerDelayInterval){clearInterval(seekerDelayInterval);seekerDelayInterval=null;}
+  detourActive=false;detourOrigin=null;detourDirection=null;
+  if(detourPingInterval){clearInterval(detourPingInterval);detourPingInterval=null;}
+  if(lieReversalTimer){clearTimeout(lieReversalTimer);lieReversalTimer=null;}
+  _liePlayed=false;_currentHiderQ=null;_currentQTruth=null;
   hideSeekerCurse();
   document.getElementById('q-panel').classList.remove('online-seeker');
   hiderStartTime=null;hiderBonusSeconds=0;hiderHand=[];hiderSelfMarker=null;
@@ -1475,6 +1498,7 @@ async function hiderReady(){
   document.getElementById('h-prize-area').style.display='block';
   startHiderTimer();
   startGPS('hider');
+  hiderHand=[{name:'Lie',category:'Counter',icon:'🎭',description:"Force a false answer on the next question. Automatically corrected after 5 min — the seeker is notified."}];
   renderHiderDrawer();
   if(hiderMapObj) setTimeout(()=>hiderMapObj.invalidateSize(),50);
   toast('Seeker has been notified — game on!','go');
@@ -1508,9 +1532,11 @@ function renderHiderDrawer(){
     const div=document.createElement('div');
     if(card){
       const isCurse=card.category!=='Score';
-      div.style.cssText=`padding:9px 12px;border-radius:999px;border:1px solid ${isCurse?'#f97316':'#5ba8f5'};font-size:11px;color:${isCurse?'#fdba74':'#9cc8f7'};text-align:center;cursor:pointer;`;
+      const isStackable=card.category==='Movement'||card.category==='Jam';
+      const blocked=hiderActiveCurse&&isStackable;
+      div.style.cssText=`padding:9px 12px;border-radius:999px;border:1px solid ${isCurse?'#f97316':'#5ba8f5'};font-size:11px;color:${isCurse?'#fdba74':'#9cc8f7'};text-align:center;cursor:${blocked?'not-allowed':'pointer'};opacity:${blocked?'0.35':'1'};`;
       div.textContent=`${card.icon} ${card.name}`;
-      div.addEventListener('click',()=>showPlayPopup(card,i));
+      if(!blocked) div.addEventListener('click',()=>showPlayPopup(card,i));
     } else {
       div.className='h-slot-empty';
       div.textContent='empty';
@@ -1530,6 +1556,9 @@ function showPlayPopup(card,idx){
   if(card.name==='Veto'){
     document.getElementById('play-popup-desc').textContent='Veto activates automatically when a question arrives. Look for the Veto button below the Yes/No options.';
     confirmBtn.style.display='none';
+  } else if(card.name==='Lie'){
+    document.getElementById('play-popup-desc').textContent='Lie activates on the current question. Look for the 🎭 button when a question arrives — it forces a false answer and auto-corrects after 5 min.';
+    confirmBtn.style.display='none';
   } else {
     document.getElementById('play-popup-desc').textContent=card.description;
     confirmBtn.style.display='';
@@ -1541,6 +1570,15 @@ function showPlayPopup(card,idx){
 function closePlayPopup(){
   document.getElementById('play-popup-backdrop').style.display='none';
   _playCardRef=null;_playCardIdx=null;
+}
+function showDirectionPicker(){
+  document.getElementById('detour-picker').style.display='flex';
+}
+async function applyDetour(direction){
+  document.getElementById('detour-picker').style.display='none';
+  if(gameId) await sbClient.from('game_events').insert({game_id:gameId,event_type:'curse_played',payload:{card:'Detour',direction}});
+  showCurseBanner('Detour',null);
+  hiderActiveCurse=true;
 }
 
 async function playCard(){
@@ -1554,12 +1592,15 @@ async function playCard(){
     const m=Math.floor(hiderBonusSeconds/60),s=hiderBonusSeconds%60;
     document.getElementById('h-bonus').textContent=`+${m}:${s.toString().padStart(2,'0')}`;
     toast('⏱️ +5 min banked!','go');
+  } else if(card.name==='Detour'){
+    showDirectionPicker();
   } else {
     const durations={Freeze:180};
     const dur=durations[card.name]||null;
     if(gameId) await sbClient.from('game_events').insert({game_id:gameId,event_type:'curse_played',payload:{card:card.name,...(dur?{duration_seconds:dur}:{})}});
     showCurseBanner(card.name,dur);
-    if(card.name==='Static') staticActive=true;
+    if(card.name==='Delay') delayActive=true;
+    hiderActiveCurse=true;
   }
 }
 
@@ -1569,7 +1610,7 @@ function showCurseBanner(name,durationSeconds){
   document.getElementById('h-curse-banner').style.display='block';
   const timeEl=document.getElementById('h-curse-time');
   if(!durationSeconds){
-    timeEl.textContent=name==='Static'?'next question':'until completed';
+    timeEl.textContent=name==='Delay'?'next question':'until completed';
     return;
   }
   let remaining=durationSeconds;
@@ -1581,6 +1622,7 @@ function showCurseBanner(name,durationSeconds){
       clearInterval(hiderCurseInterval);hiderCurseInterval=null;
       document.getElementById('h-curse-banner').style.display='none';
       if(gameId) sbClient.from('game_events').insert({game_id:gameId,event_type:'curse_expired',payload:{card:name}});
+      hiderActiveCurse=false;renderHiderDrawer();
       return;
     }
     tick();
@@ -1607,6 +1649,29 @@ function hideSeekerCurse(){
   if(seekerCurseInterval){clearInterval(seekerCurseInterval);seekerCurseInterval=null;}
   seekerCursed=false;
   document.getElementById('seeker-curse-overlay').style.display='none';
+}
+function startSeekerDetour(direction){
+  if(seekerCurseInterval){clearInterval(seekerCurseInterval);seekerCurseInterval=null;}
+  detourActive=true;
+  detourOrigin={lat:myPos.lat,lng:myPos.lng};
+  detourDirection=direction;
+  seekerCursed=true;
+  document.getElementById('seeker-curse-name').textContent=`Walk ${direction.toUpperCase()}`;
+  document.getElementById('seeker-curse-timer').textContent='0.00 / 0.27 mi';
+  document.getElementById('seeker-curse-overlay').style.display='flex';
+  if(seekerPingInterval){clearInterval(seekerPingInterval);seekerPingInterval=null;}
+  if(sendSeekerPingFn){sendSeekerPingFn();detourPingInterval=setInterval(sendSeekerPingFn,30*1000);}
+}
+async function finishDetour(){
+  detourActive=false;
+  detourOrigin=null;
+  detourDirection=null;
+  seekerCursed=false;
+  document.getElementById('seeker-curse-overlay').style.display='none';
+  if(detourPingInterval){clearInterval(detourPingInterval);detourPingInterval=null;}
+  if(sendSeekerPingFn) seekerPingInterval=setInterval(sendSeekerPingFn,5*60*1000);
+  toast('🔀 Detour complete! Questions re-enabled.','go');
+  if(gameId) await sbClient.from('game_events').insert({game_id:gameId,event_type:'detour_complete',payload:{}});
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1638,6 +1703,21 @@ function startGPS(context){
       if(map && myRole==='seeker'){
         if(seekerMarker) seekerMarker.setLatLng([myPos.lat,myPos.lng]);
         if(centerOnGPS) map.panTo([myPos.lat,myPos.lng],{animate:true,duration:0.5});
+      }
+      if(myRole==='seeker'&&detourActive&&detourOrigin){
+        const totalDist=distMi(detourOrigin.lat,detourOrigin.lng,myPos.lat,myPos.lng);
+        const timerEl=document.getElementById('seeker-curse-timer');
+        if(timerEl) timerEl.textContent=`${totalDist.toFixed(2)} / 0.27 mi`;
+        if(totalDist>=0.27){
+          const nsComp=(myPos.lat-detourOrigin.lat)*69;
+          const ewComp=(myPos.lng-detourOrigin.lng)*53;
+          let unlocked=false;
+          if(detourDirection==='North'&&nsComp>0&&nsComp>=Math.abs(ewComp)) unlocked=true;
+          else if(detourDirection==='South'&&nsComp<0&&Math.abs(nsComp)>=Math.abs(ewComp)) unlocked=true;
+          else if(detourDirection==='East'&&ewComp>0&&ewComp>=Math.abs(nsComp)) unlocked=true;
+          else if(detourDirection==='West'&&ewComp<0&&Math.abs(ewComp)>=Math.abs(nsComp)) unlocked=true;
+          if(unlocked) finishDetour();
+        }
       }
       if(hiderMapObj && myRole==='hider'){
         const hIcon=L.divIcon({className:'',html:'<div class="hider-dot"></div>',iconSize:[18,18],iconAnchor:[9,9]});
@@ -1807,9 +1887,9 @@ function launchGame(){
   subscribeToGame();
   // Start seeker ping interval (fires immediately, then every 5 min)
   if(seekerPingInterval) clearInterval(seekerPingInterval);
-  const sendSeekerPing=async()=>{if(!gameId||!myPos) return;await sbClient.from('game_events').insert({game_id:gameId,event_type:'seeker_ping',payload:{lat:myPos.lat,lng:myPos.lng}});};
-  sendSeekerPing();
-  seekerPingInterval=setInterval(sendSeekerPing,5*60*1000);
+  sendSeekerPingFn=async()=>{if(!gameId||!myPos) return;await sbClient.from('game_events').insert({game_id:gameId,event_type:'seeker_ping',payload:{lat:myPos.lat,lng:myPos.lng}});};
+  sendSeekerPingFn();
+  seekerPingInterval=setInterval(sendSeekerPingFn,5*60*1000);
   document.getElementById('q-panel').classList.add('online-seeker');
   setTimeout(()=>{map.invalidateSize();renderFog();updateMatchInfo();updateTentPlaces();},100);
 }
@@ -1828,11 +1908,16 @@ function exitGame(){
   if(fbUnsubscribe){fbUnsubscribe();fbUnsubscribe=null;}
   if(lastSeenInterval){clearInterval(lastSeenInterval);lastSeenInterval=null;}
   if(seekerPingInterval){clearInterval(seekerPingInterval);seekerPingInterval=null;}
-  if(seekerStaticInterval){clearInterval(seekerStaticInterval);seekerStaticInterval=null;}
-  staticActive=false;
+  if(seekerDelayInterval){clearInterval(seekerDelayInterval);seekerDelayInterval=null;}
+  delayActive=false;
+  detourActive=false;detourOrigin=null;detourDirection=null;
+  if(detourPingInterval){clearInterval(detourPingInterval);detourPingInterval=null;}
+  if(lieReversalTimer){clearTimeout(lieReversalTimer);lieReversalTimer=null;}
+  _liePlayed=false;_currentHiderQ=null;_currentQTruth=null;
+  hiderActiveCurse=false;
   hideSeekerCurse();
-  document.getElementById('seeker-static-countdown').style.display='none';
-  document.getElementById('q-panel').classList.remove('static-wait');
+  document.getElementById('seeker-delay-countdown').style.display='none';
+  document.getElementById('q-panel').classList.remove('delay-wait');
   document.getElementById('q-panel').classList.remove('online-seeker');
   // Unsubscribe Supabase channel
   if(sbChannel){sbChannel.unsubscribe();sbChannel=null;}
@@ -2264,16 +2349,34 @@ function showHiderIncomingQuestion(q){
   document.getElementById('h-q-waiting').style.display='none';
   const el=document.getElementById('h-q-incoming');
   el.style.display='';
+  _currentHiderQ=q;_currentQTruth=null;_liePlayed=false;
+  const lieTypes=['radar','match','measure'];
+  if(lieTypes.includes(q.type)){
+    if(q.type==='radar'){
+      _currentQTruth=distMi(myPos.lat,myPos.lng,q.params.sLat,q.params.sLng)<=q.params.dist?'yes':'no';
+    } else if(q.type==='match'){
+      const hn=nearestOf(myPos.lat,myPos.lng,q.params.placeType);
+      _currentQTruth=(hn&&hn.place.name===q.params.placeName)?'yes':'no';
+    } else if(q.type==='measure'){
+      _currentQTruth=distMi(myPos.lat,myPos.lng,q.params.la,q.params.lo)<q.params.sd?'closer':'further';
+    }
+  }
   let btnsHtml;
   if(q.type==='tentacles'){
     btnsHtml='<div class="tent-grid">'+q.params.places.map(p=>`<button class="tent-btn" data-name="${p.name.replace(/"/g,'&quot;')}">${p.name}</button>`).join('')+'</div>';
   } else {
-    const map={radar:['yes','Yes','no','No'],match:['yes','Yes','no','No'],measure:['closer','Closer','further','Further'],thermo:['hotter','Hotter','colder','Colder']};
-    const[ansA,lblA,ansB,lblB]=map[q.type]||['yes','Yes','no','No'];
-    btnsHtml=`<div class="arow"><button class="btn btn-g h-ans-btn" data-ans="${ansA}">${lblA}</button><button class="btn btn-r h-ans-btn" data-ans="${ansB}">${lblB}</button></div>`;
+    const amap={radar:['yes','Yes','no','No'],match:['yes','Yes','no','No'],measure:['closer','Closer','further','Further'],thermo:['hotter','Hotter','colder','Colder']};
+    const[ansA,lblA,ansB,lblB]=amap[q.type]||['yes','Yes','no','No'];
+    const aOff=_currentQTruth!==null&&_currentQTruth!==ansA;
+    const bOff=_currentQTruth!==null&&_currentQTruth!==ansB;
+    const aExtra=aOff?'disabled style="opacity:0.3;cursor:not-allowed;"':'';
+    const bExtra=bOff?'disabled style="opacity:0.3;cursor:not-allowed;"':'';
+    btnsHtml=`<div class="arow"><button class="btn btn-g h-ans-btn" data-ans="${ansA}" ${aExtra}>${lblA}</button><button class="btn btn-r h-ans-btn" data-ans="${ansB}" ${bExtra}>${lblB}</button></div>`;
   }
   const hasVeto=prizePicks===1&&hiderHand.some(c=>c.name==='Veto');
   if(hasVeto) btnsHtml+=`<div style="margin-top:8px;"><button class="h-veto-btn" style="width:100%;padding:10px;border-radius:8px;background:#1a0a22;border:1px solid #a060f0;color:#c87ff5;font-family:'Space Mono',monospace;font-size:13px;cursor:pointer;">🛡️ Veto this question</button></div>`;
+  const hasLie=_currentQTruth!==null&&hiderHand.some(c=>c.name==='Lie');
+  if(hasLie) btnsHtml+=`<div style="margin-top:8px;"><button id="h-lie-btn" style="width:100%;padding:10px;border-radius:8px;background:#1a0822;border:1px solid #d946ef;color:#e879f9;font-family:'Space Mono',monospace;font-size:13px;cursor:pointer;">🎭 Use Lie card</button></div>`;
   el.innerHTML=`<div class="h-q-text">${q.text}</div>${btnsHtml}`;
   if(q.type==='tentacles'){
     el.querySelectorAll('.tent-btn').forEach(btn=>btn.addEventListener('click',()=>hiderAnswer(btn.dataset.name)));
@@ -2282,18 +2385,49 @@ function showHiderIncomingQuestion(q){
   }
   const vetoBtn=el.querySelector('.h-veto-btn');
   if(vetoBtn) vetoBtn.addEventListener('click',()=>hiderVeto(q));
+  const lieBtn=el.querySelector('#h-lie-btn');
+  if(lieBtn) lieBtn.addEventListener('click',()=>activateLieCard(el));
+}
+
+function activateLieCard(el){
+  const lieIdx=hiderHand.findIndex(c=>c.name==='Lie');
+  if(lieIdx<0) return;
+  hiderHand.splice(lieIdx,1);
+  hiderActiveCurse=true;
+  renderHiderDrawer();
+  _liePlayed=true;
+  el.querySelectorAll('.h-ans-btn').forEach(btn=>{
+    const isTruth=btn.dataset.ans===_currentQTruth;
+    btn.disabled=isTruth;
+    btn.style.opacity=isTruth?'0.3':'';
+    btn.style.cursor=isTruth?'not-allowed':'';
+  });
+  const lieBtn=el.querySelector('#h-lie-btn');
+  if(lieBtn){lieBtn.textContent='🎭 Lie active';lieBtn.disabled=true;lieBtn.style.opacity='0.5';}
 }
 
 async function hiderAnswer(answer){
   if(!gameId) return;
-  if(staticActive){
-    staticActive=false;
+  if(delayActive){
+    delayActive=false;
+    hiderActiveCurse=false;
     document.getElementById('h-curse-banner').style.display='none';
     if(hiderCurseInterval){clearInterval(hiderCurseInterval);hiderCurseInterval=null;}
     await sbClient.from('game_events').insert({game_id:gameId,event_type:'static_delay',payload:{answer,delay_seconds:180}});
+    renderHiderDrawer();
   } else {
     await sbClient.from('game_events').insert({game_id:gameId,event_type:'answer',payload:{answer}});
   }
+  if(_liePlayed&&_currentHiderQ&&_currentQTruth!==null){
+    const capturedQ=_currentHiderQ,capturedTruth=_currentQTruth;
+    if(lieReversalTimer) clearTimeout(lieReversalTimer);
+    lieReversalTimer=setTimeout(async()=>{
+      lieReversalTimer=null;
+      hiderActiveCurse=false;renderHiderDrawer();
+      if(gameId) await sbClient.from('game_events').insert({game_id:gameId,event_type:'lie_reversal',payload:{type:capturedQ.type,params:capturedQ.params,trueAnswer:capturedTruth}});
+    },5*60*1000);
+  }
+  _liePlayed=false;_currentHiderQ=null;_currentQTruth=null;
   document.getElementById('h-q-incoming').style.display='none';
   document.getElementById('h-q-incoming').innerHTML='';
   document.getElementById('h-q-waiting').style.display='';
@@ -2414,32 +2548,40 @@ function handleGameEvent(payload){
   } else if(evt.event_type==='seeker_ping'&&myRole==='hider'){
     handleSeekerPing(evtData.lat,evtData.lng);
   } else if(evt.event_type==='static_delay'&&myRole==='seeker'){
-    startSeekerStaticCountdown(evtData.answer,evtData.delay_seconds||180);
+    startSeekerDelayCountdown(evtData.answer,evtData.delay_seconds||180);
   } else if(evt.event_type==='curse_played'&&myRole==='seeker'){
-    if(evtData.card==='Static') return;
+    if(evtData.card==='Delay') return;
+    if(evtData.card==='Detour'){startSeekerDetour(evtData.direction);return;}
     showSeekerCurse(evtData.card,evtData.duration_seconds||null);
   } else if(evt.event_type==='curse_expired'&&myRole==='seeker'){
     hideSeekerCurse();
+  } else if(evt.event_type==='detour_complete'&&myRole==='hider'){
+    document.getElementById('h-curse-banner').style.display='none';
+    if(hiderCurseInterval){clearInterval(hiderCurseInterval);hiderCurseInterval=null;}
+    hiderActiveCurse=false;renderHiderDrawer();
+  } else if(evt.event_type==='lie_reversal'&&myRole==='seeker'){
+    applyLieReversal(evtData.type,evtData.params,evtData.trueAnswer);
+    toast('📍 Hider correction received — fog updated','go');
   }
 }
 
-function startSeekerStaticCountdown(answer,delaySecs){
-  if(seekerStaticInterval){clearInterval(seekerStaticInterval);seekerStaticInterval=null;}
+function startSeekerDelayCountdown(answer,delaySecs){
+  if(seekerDelayInterval){clearInterval(seekerDelayInterval);seekerDelayInterval=null;}
   document.getElementById('seeker-asking').style.display='none';
   document.getElementById('q-panel').classList.remove('asking');
-  const cdEl=document.getElementById('seeker-static-countdown');
-  const timerEl=document.getElementById('seeker-static-timer');
+  const cdEl=document.getElementById('seeker-delay-countdown');
+  const timerEl=document.getElementById('seeker-delay-timer');
   cdEl.style.display='';
-  document.getElementById('q-panel').classList.add('static-wait');
+  document.getElementById('q-panel').classList.add('delay-wait');
   let remaining=delaySecs;
   const tick=()=>{const m=Math.floor(remaining/60),s=remaining%60;timerEl.textContent=`${m}:${s.toString().padStart(2,'0')}`;};
   tick();
-  seekerStaticInterval=setInterval(()=>{
+  seekerDelayInterval=setInterval(()=>{
     remaining--;
     if(remaining<=0){
-      clearInterval(seekerStaticInterval);seekerStaticInterval=null;
+      clearInterval(seekerDelayInterval);seekerDelayInterval=null;
       cdEl.style.display='none';
-      document.getElementById('q-panel').classList.remove('static-wait');
+      document.getElementById('q-panel').classList.remove('delay-wait');
       if(!pendingQuestion) return;
       const q=pendingQuestion;
       pendingQuestion=null;
@@ -2626,6 +2768,30 @@ function processTentaclesAnswer(params,answer){
   elimRecords.push({type:'tentacles',placeType:type,placeName:p.name});
   log('tent',`Closest ${typeName}: "${p.name}".`);
   onAnswer();
+}
+
+function applyLieReversal(type,params,trueAnswer){
+  let falseIdx=-1;
+  for(let i=elimRecords.length-1;i>=0;i--){
+    const r=elimRecords[i];
+    if(type==='radar'&&r.type==='radar'&&Math.abs(r.sLat-params.sLat)<0.0001&&Math.abs(r.sLng-params.sLng)<0.0001){falseIdx=i;break;}
+    else if(type==='match'&&r.type==='match'&&r.placeType===params.placeType&&r.placeName===params.placeName){falseIdx=i;break;}
+    else if(type==='measure'&&r.type==='measure'&&Math.abs(r.la-params.la)<0.0001&&Math.abs(r.lo-params.lo)<0.0001){falseIdx=i;break;}
+  }
+  if(falseIdx<0) return;
+  elimRecords.splice(falseIdx,1);
+  let trueRecord;
+  if(type==='radar'){
+    trueRecord={type:'radar',sLat:params.sLat,sLng:params.sLng,distMi:params.dist,inside:trueAnswer==='yes'};
+  } else if(type==='match'){
+    trueRecord={type:'match',placeType:params.placeType,placeName:params.placeName,same:trueAnswer==='yes'};
+  } else if(type==='measure'){
+    trueRecord={type:'measure',la:params.la,lo:params.lo,landmarkName:params.landmarkName,sd:params.sd,sLat:params.sLat,sLng:params.sLng,ans:trueAnswer};
+  }
+  if(trueRecord) elimRecords.push(trueRecord);
+  eliminations=[];elimShapes=[];refLayers=[];
+  elimRecords.forEach(rec=>replayElimination(rec));
+  renderFog();
 }
 
 // ── STATE PERSISTENCE ────────────────────────────────────────────
