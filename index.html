@@ -153,7 +153,7 @@ body{background:var(--ink);color:var(--txt);font-family:'DM Sans',sans-serif;ove
 #h-map-wrap{position:relative;flex:1;min-height:0;overflow:hidden;}
 #hider-map{position:absolute;inset:0;}
 #h-hand-btn{position:absolute;top:10px;left:10px;z-index:1100;display:flex;align-items:center;gap:5px;padding:7px 11px;border-radius:10px;background:#1a1a22;border:1px solid #3a3a44;font-family:'Space Mono',monospace;font-size:11px;color:#fdba74;cursor:pointer;letter-spacing:0.3px;}
-#h-curse-banner{display:none;position:absolute;bottom:8px;left:8px;right:8px;z-index:200;background:rgba(42,21,5,0.92);border:1px solid #f97316;border-radius:10px;padding:8px 12px;font-size:12px;color:#fdba74;backdrop-filter:blur(4px);}
+#h-curse-banner{display:none;position:absolute;bottom:8px;left:8px;right:8px;z-index:1150;background:rgba(42,21,5,0.92);border:1px solid #f97316;border-radius:10px;padding:8px 12px;font-size:12px;color:#fdba74;backdrop-filter:blur(4px);}
 #h-drawer{position:absolute;top:0;left:0;bottom:0;z-index:1050;width:155px;background:#101016;border-right:1px solid #3a3a44;display:flex;flex-direction:column;transform:translateX(-100%);transition:transform 0.22s ease;}
 #h-drawer.open{transform:translateX(0);}
 #h-drawer-head{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #3a3a44;flex-shrink:0;}
@@ -179,6 +179,7 @@ body{background:var(--ink);color:var(--txt);font-family:'DM Sans',sans-serif;ove
 #keep-popup-confirm{width:100%;padding:12px;border-radius:8px;background:#f97316;color:#1a0e05;border:none;font-family:'Space Mono',monospace;font-size:13px;font-weight:500;cursor:pointer;}
 #keep-popup-confirm:disabled{opacity:0.4;cursor:not-allowed;}
 #keep-popup-close{position:absolute;top:16px;right:16px;background:none;border:none;color:#8a8a96;font-size:16px;cursor:pointer;line-height:1;padding:0;}
+#seeker-curse-overlay{display:none;position:fixed;inset:0;z-index:6000;background:rgba(8,4,24,0.94);flex-direction:column;align-items:center;justify-content:center;text-align:center;}
 #keep-popup-discard{margin-top:14px;border-top:1px solid #3a3a44;padding-top:12px;}
 #keep-popup-discard-lbl{font-size:11px;color:#8a8a96;margin-bottom:8px;}
 #keep-popup-hand-pills{display:flex;flex-wrap:wrap;gap:6px;}
@@ -577,6 +578,13 @@ body{background:var(--ink);color:var(--txt);font-family:'DM Sans',sans-serif;ove
       <div id="keep-popup-hand-pills"></div>
     </div>
   </div>
+</div>
+
+<div id="seeker-curse-overlay">
+  <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#a78bfa;margin-bottom:8px;">CURSED</div>
+  <div id="seeker-curse-name" style="font-size:26px;font-weight:700;color:#e8e8ee;margin-bottom:14px;font-family:'Space Mono',monospace;"></div>
+  <div id="seeker-curse-timer" style="font-family:'Space Mono',monospace;font-size:44px;font-weight:700;color:#f97316;letter-spacing:4px;"></div>
+  <div style="font-size:12px;color:#8a8a96;margin-top:16px;max-width:220px;line-height:1.5;">Questions disabled until curse expires</div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -1237,7 +1245,7 @@ const CARD_POOL=[
 let _keepCard=null,_keepDiscardIdx=null;
 let _playCardRef=null,_playCardIdx=null,hiderCurseInterval=null;
 let vetoedQuestion=null,prizePicks=1,_keepPillIdx=null;
-let staticActive=false,seekerStaticInterval=null;
+let staticActive=false,seekerStaticInterval=null,seekerCurseInterval=null,seekerCursed=false;
 let seekerHiderMarker=null,lastSeenTs=null,lastSeenInterval=null;
 let lastSeekerPingPos=null,seekerPingInterval=null;
 const deviceId=(()=>{let id=localStorage.getItem('cvDeviceId');if(!id){id=crypto.randomUUID();localStorage.setItem('cvDeviceId',id);}return id;})();
@@ -1284,6 +1292,7 @@ function backToRole(){
   lastSeenTs=null;lastSeekerPingPos=null;
   staticActive=false;prizePicks=1;
   if(seekerStaticInterval){clearInterval(seekerStaticInterval);seekerStaticInterval=null;}
+  hideSeekerCurse();
   document.getElementById('q-panel').classList.remove('online-seeker');
   hiderStartTime=null;hiderBonusSeconds=0;hiderHand=[];hiderSelfMarker=null;
   // Reset hider screen to pre-ready state for next session
@@ -1578,6 +1587,28 @@ function showCurseBanner(name,durationSeconds){
   },1000);
 }
 
+function showSeekerCurse(name,durationSeconds){
+  if(seekerCurseInterval){clearInterval(seekerCurseInterval);seekerCurseInterval=null;}
+  seekerCursed=true;
+  document.getElementById('seeker-curse-name').textContent=name;
+  document.getElementById('seeker-curse-overlay').style.display='flex';
+  const timerEl=document.getElementById('seeker-curse-timer');
+  if(!durationSeconds){timerEl.textContent='';return;}
+  let remaining=durationSeconds;
+  const tick=()=>{const m=Math.floor(remaining/60),s=remaining%60;timerEl.textContent=`${m}:${s.toString().padStart(2,'0')}`;};
+  tick();
+  seekerCurseInterval=setInterval(()=>{
+    remaining--;
+    if(remaining<=0){hideSeekerCurse();return;}
+    tick();
+  },1000);
+}
+function hideSeekerCurse(){
+  if(seekerCurseInterval){clearInterval(seekerCurseInterval);seekerCurseInterval=null;}
+  seekerCursed=false;
+  document.getElementById('seeker-curse-overlay').style.display='none';
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // GPS — geolocation + sharing
 // ═══════════════════════════════════════════════════════════════════
@@ -1799,6 +1830,7 @@ function exitGame(){
   if(seekerPingInterval){clearInterval(seekerPingInterval);seekerPingInterval=null;}
   if(seekerStaticInterval){clearInterval(seekerStaticInterval);seekerStaticInterval=null;}
   staticActive=false;
+  hideSeekerCurse();
   document.getElementById('seeker-static-countdown').style.display='none';
   document.getElementById('q-panel').classList.remove('static-wait');
   document.getElementById('q-panel').classList.remove('online-seeker');
@@ -2207,6 +2239,7 @@ function subscribeToGame(){
 }
 
 async function insertQuestionEvent(type,text,params){
+  if(seekerCursed){toast('You are cursed — wait for the effect to expire','err');return;}
   pendingQuestion={type,text,params};
   setSeekerQuestionPending(true);
   const{error}=await sbClient.from('game_events').insert({game_id:gameId,event_type:'question',payload:{type,text,params}});
@@ -2382,6 +2415,11 @@ function handleGameEvent(payload){
     handleSeekerPing(evtData.lat,evtData.lng);
   } else if(evt.event_type==='static_delay'&&myRole==='seeker'){
     startSeekerStaticCountdown(evtData.answer,evtData.delay_seconds||180);
+  } else if(evt.event_type==='curse_played'&&myRole==='seeker'){
+    if(evtData.card==='Static') return;
+    showSeekerCurse(evtData.card,evtData.duration_seconds||null);
+  } else if(evt.event_type==='curse_expired'&&myRole==='seeker'){
+    hideSeekerCurse();
   }
 }
 
