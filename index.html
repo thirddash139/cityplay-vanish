@@ -44,6 +44,13 @@ try {
   window._fbListen = null;
 }
 </script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+  const SUPABASE_URL = 'https://vndukliiuhazjwvmjnpq.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZuZHVrbGlpdWhhemp3dm1qbnBxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzNzg3MTksImV4cCI6MjA5Njk1NDcxOX0.C0z0YMASImuGgEN0Xt9ju7G-iHPXwuJ6c5t9J5cBXwU';
+  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  console.log('Supabase ready');
+</script>
 <style>
 :root{--ink:#0d0d12;--ink2:#16161f;--ink3:#1e1e2a;--rim:#2c2c3e;--rim2:#3a3a52;--go:#00e87a;--go2:#00c466;--hot:#ff6b35;--cold:#38bdf8;--volt:#f0e030;--muted:#6b6b88;--sub:#9898b8;--txt:#e2e2f0;--danger:#ff4060;--purple:#a78bfa;}
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
@@ -135,7 +142,51 @@ body{background:var(--ink);color:var(--txt);font-family:'DM Sans',sans-serif;ove
 /* ═══════════════════════════════════════════════════════════════ */
 /* SCREEN: HIDER PAIRING                                              */
 /* ═══════════════════════════════════════════════════════════════ */
-#hider-screen{padding:24px 22px;justify-content:center;align-items:center;text-align:center;}
+#hider-screen{padding:0;}
+/* ═══════════════════════════════════════════════════════════════ */
+/* SCREEN: HIDER GAME LAYOUT                                         */
+/* ═══════════════════════════════════════════════════════════════ */
+#h-status-bar{display:flex;flex-shrink:0;background:#0d0d12;border-bottom:1px solid rgba(255,255,255,0.07);padding:calc(env(safe-area-inset-top) + 8px) 16px 10px;}
+.h-stat{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;}
+.h-stat-lbl{font-family:'Space Mono',monospace;font-size:8px;color:#8a8a96;letter-spacing:2px;text-transform:uppercase;}
+.h-stat-val{font-family:'Space Mono',monospace;font-size:18px;font-weight:700;color:#e8e8ee;line-height:1.1;}
+#h-map-wrap{position:relative;flex:1;min-height:0;overflow:hidden;}
+#hider-map{position:absolute;inset:0;}
+#h-hand-btn{position:absolute;top:10px;left:10px;z-index:200;display:flex;align-items:center;gap:5px;padding:7px 11px;border-radius:10px;background:#1a1a22;border:1px solid #3a3a44;font-family:'Space Mono',monospace;font-size:11px;color:#fdba74;cursor:pointer;letter-spacing:0.3px;}
+#h-curse-banner{display:none;position:absolute;bottom:8px;left:8px;right:8px;z-index:200;background:rgba(42,21,5,0.92);border:1px solid #f97316;border-radius:10px;padding:8px 12px;font-size:12px;color:#fdba74;backdrop-filter:blur(4px);}
+#h-drawer{position:absolute;top:0;left:0;bottom:0;z-index:300;width:155px;background:#101016;border-right:1px solid #3a3a44;display:flex;flex-direction:column;transform:translateX(-100%);transition:transform 0.22s ease;}
+#h-drawer.open{transform:translateX(0);}
+#h-drawer-head{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #3a3a44;flex-shrink:0;}
+#h-drawer-close{background:none;border:none;color:var(--muted);font-size:15px;cursor:pointer;padding:0;line-height:1;}
+#h-drawer-slots{flex:1;overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:6px;}
+.h-slot-empty{padding:9px 12px;border-radius:999px;border:1px dashed #3a3a44;font-size:11px;color:#55555f;text-align:center;}
+#h-q-area{flex-shrink:0;padding:10px 14px 8px;}
+#h-q-waiting{background:#1a1a22;border:1px solid #3a3a44;border-radius:12px;padding:13px 16px;font-size:13px;color:var(--muted);text-align:center;}
+#h-prize-area{flex-shrink:0;padding:0 14px calc(env(safe-area-inset-bottom) + 8px);border-top:1px solid rgba(255,255,255,0.05);}
+.h-sect-lbl{font-size:10px;color:var(--muted);padding:7px 2px 6px;letter-spacing:0.3px;}
+#h-prize-pills{display:flex;gap:8px;overflow-x:auto;}
+.prize-pill{padding:7px 13px;border-radius:999px;border:1px solid;background:rgba(26,26,34,0.9);font-size:12px;font-family:'Space Mono',monospace;cursor:pointer;white-space:nowrap;flex-shrink:0;}
+.prize-pill:active{opacity:0.7;}
+#keep-popup-backdrop,#play-popup-backdrop{position:fixed;inset:0;z-index:900;background:rgba(5,5,8,0.78);align-items:center;justify-content:center;padding:20px;}
+#play-popup{background:#1a1a22;border-radius:14px;padding:20px;width:100%;max-width:340px;position:relative;}
+#play-popup-name{font-size:15px;font-weight:500;margin-bottom:10px;padding-right:28px;}
+#play-popup-desc{font-size:12px;color:#8a8a96;line-height:1.5;margin-bottom:14px;}
+#play-popup-confirm{width:100%;padding:12px;border-radius:8px;background:#f97316;color:#1a0e05;border:none;font-family:'Space Mono',monospace;font-size:13px;font-weight:500;cursor:pointer;}
+#play-popup-close{position:absolute;top:16px;right:16px;background:none;border:none;color:#8a8a96;font-size:16px;cursor:pointer;line-height:1;padding:0;}
+#keep-popup{background:#1a1a22;border-radius:14px;padding:20px;width:100%;max-width:340px;position:relative;}
+#keep-popup-name{font-size:15px;font-weight:500;margin-bottom:10px;padding-right:28px;}
+#keep-popup-desc{font-size:12px;color:#8a8a96;line-height:1.5;margin-bottom:14px;}
+#keep-popup-confirm{width:100%;padding:12px;border-radius:8px;background:#f97316;color:#1a0e05;border:none;font-family:'Space Mono',monospace;font-size:13px;font-weight:500;cursor:pointer;}
+#keep-popup-confirm:disabled{opacity:0.4;cursor:not-allowed;}
+#keep-popup-close{position:absolute;top:16px;right:16px;background:none;border:none;color:#8a8a96;font-size:16px;cursor:pointer;line-height:1;padding:0;}
+#keep-popup-discard{margin-top:14px;border-top:1px solid #3a3a44;padding-top:12px;}
+#keep-popup-discard-lbl{font-size:11px;color:#8a8a96;margin-bottom:8px;}
+#keep-popup-hand-pills{display:flex;flex-wrap:wrap;gap:6px;}
+.discard-pill{padding:5px 10px;border-radius:999px;border:1px solid;background:none;font-size:11px;font-family:'Space Mono',monospace;cursor:pointer;}
+.discard-pill.sel{background:rgba(249,115,22,0.15);}
+#h-ready-wrap{flex-shrink:0;padding:10px 16px calc(env(safe-area-inset-bottom) + 12px);}
+#h-ready-btn{width:100%;padding:16px;border-radius:14px;background:var(--hot);color:var(--ink);font-family:'Space Mono',monospace;font-size:14px;font-weight:700;letter-spacing:2px;text-transform:uppercase;border:none;cursor:pointer;}
+#h-ready-btn:disabled{opacity:0.5;cursor:not-allowed;}
 .code-box{background:var(--ink2);border:1px solid var(--rim);border-radius:14px;padding:24px;margin:20px 0;max-width:380px;width:100%;}
 .code-label{font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:8px;}
 .code-display{font-family:'Space Mono',monospace;font-size:36px;font-weight:700;color:var(--hot);letter-spacing:6px;margin-bottom:14px;}
@@ -189,6 +240,8 @@ body{background:var(--ink);color:var(--txt);font-family:'DM Sans',sans-serif;ove
 .tab{flex-shrink:0;padding:7px 13px;border-radius:8px 8px 0 0;font-size:10px;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;color:var(--muted);background:transparent;border:none;cursor:pointer;font-family:inherit;transition:all 0.15s;white-space:nowrap;}
 .tab.on{color:var(--go);background:rgba(0,232,122,0.06);}
 .qb{padding:13px 15px 16px;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+#q-panel.veto-active .tabs,#q-panel.veto-active .qb{display:none!important;}
+#q-panel.static-wait .tabs,#q-panel.static-wait .qb{display:none!important;}
 .qt{font-size:14px;color:var(--sub);line-height:1.5;margin-bottom:11px;}
 .qt em{font-style:normal;color:var(--go);font-weight:600;}
 .irow{display:flex;gap:7px;margin-bottom:9px;flex-wrap:wrap;}
@@ -222,7 +275,8 @@ body{background:var(--ink);color:var(--txt);font-family:'DM Sans',sans-serif;ove
 
 .seeker-dot{width:18px;height:18px;background:var(--go);border-radius:50%;border:2px solid rgba(0,232,122,0.5);box-shadow:0 0 12px var(--go),0 0 28px rgba(0,232,122,0.3);animation:seek 2s ease-in-out infinite;}
 @keyframes seek{0%,100%{box-shadow:0 0 12px var(--go),0 0 28px rgba(0,232,122,0.3);}50%{box-shadow:0 0 20px var(--go),0 0 48px rgba(0,232,122,0.4);}}
-.hider-dot{width:18px;height:18px;background:var(--hot);border-radius:50%;border:2px solid rgba(255,107,53,0.5);box-shadow:0 0 12px var(--hot),0 0 28px rgba(255,107,53,0.3);}
+.hider-dot{width:18px;height:18px;background:var(--hot);border-radius:50%;border:2px solid rgba(255,107,53,0.5);box-shadow:0 0 12px var(--hot),0 0 28px rgba(255,107,53,0.3);animation:hider-pulse 2.5s ease-in-out infinite;}
+@keyframes hider-pulse{0%,100%{box-shadow:0 0 12px var(--hot),0 0 28px rgba(255,107,53,0.3);}50%{box-shadow:0 0 22px var(--hot),0 0 50px rgba(255,107,53,0.45);}}
 .pin-a-dot{width:13px;height:13px;background:var(--hot);border-radius:50%;border:2px solid #ff8c5a;box-shadow:0 0 7px rgba(255,107,53,0.5);}
 .pin-b-dot{width:13px;height:13px;background:var(--cold);border-radius:50%;border:2px solid #7dd3fc;box-shadow:0 0 7px rgba(56,189,248,0.5);}
 
@@ -305,26 +359,56 @@ body{background:var(--ink);color:var(--txt);font-family:'DM Sans',sans-serif;ove
 
 <!-- ═════════════════ HIDER PAIRING ═════════════════ -->
 <div id="hider-screen" class="screen" style="display:none;padding:0;">
-  <!-- Hider sees a full-screen map with their zone boundaries -->
-  <!-- The ready button floats at the bottom -->
-  <div style="position:absolute;top:calc(env(safe-area-inset-top)+12px);left:0;right:0;z-index:100;padding:0 14px;pointer-events:none;">
-    <div style="background:rgba(13,13,18,0.9);border:1px solid var(--hot);border-radius:12px;padding:10px 14px;backdrop-filter:blur(8px);">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px;">
-        <div style="font-family:'Space Mono',monospace;font-size:11px;color:var(--hot);letter-spacing:2px;">👁 YOU ARE THE HIDER</div>
-        <div id="seeker-last-seen" style="font-size:10px;color:var(--muted);display:none;">
-          <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--muted);margin-right:4px;vertical-align:middle;" id="seeker-dot-status"></span>
-          <span id="seeker-last-seen-text">Seeker not yet live</span>
-        </div>
-      </div>
-      <div style="font-size:12px;color:var(--sub);">Find a spot within the <strong style="color:var(--txt);" id="hider-zone-name">selected zone</strong>. Tap Ready when hidden.</div>
+
+  <!-- 1A. Status Bar -->
+  <div id="h-status-bar">
+    <div class="h-stat">
+      <div class="h-stat-lbl">Hiding</div>
+      <div class="h-stat-val" id="h-hiding-time" style="color:#f97316;">0:00</div>
+    </div>
+    <div class="h-stat">
+      <div class="h-stat-lbl">Bonus</div>
+      <div class="h-stat-val" id="h-bonus">+0:00</div>
+    </div>
+    <div class="h-stat">
+      <div class="h-stat-lbl">Seekers</div>
+      <div class="h-stat-val" id="h-seekers" style="font-size:11px;color:#5ba8f5;">Waiting for ping…</div>
     </div>
   </div>
-  <div id="hider-map" style="position:absolute;inset:0;z-index:1;"></div>
-  <div style="position:absolute;bottom:0;left:0;right:0;z-index:100;padding:12px 16px calc(env(safe-area-inset-bottom)+12px);">
-    <button onclick="hiderReady()" style="width:100%;padding:16px;border-radius:14px;background:var(--hot);color:var(--ink);font-family:'Space Mono',monospace;font-size:14px;font-weight:700;letter-spacing:2px;text-transform:uppercase;border:none;cursor:pointer;">
-      ✓ I'M READY — START THE HUNT
-    </button>
+
+  <!-- 1B. Map (hero) -->
+  <div id="h-map-wrap">
+    <button id="h-hand-btn" onclick="toggleHiderDrawer()">🃏 Hand <span id="h-hand-count">0</span>/6</button>
+    <div id="hider-map"></div>
+    <div id="h-curse-banner">🔥 <span id="h-curse-name"></span> is active on the seekers — <span id="h-curse-time"></span></div>
+    <!-- Left drawer -->
+    <div id="h-drawer">
+      <div id="h-drawer-head">
+        <span style="font-size:10px;color:var(--muted);letter-spacing:0.5px;">Hand — tap to play</span>
+        <button id="h-drawer-close" onclick="toggleHiderDrawer()">✕</button>
+      </div>
+      <div id="h-drawer-slots"></div>
+    </div>
   </div>
+
+  <!-- 1C. Question Area -->
+  <div id="h-q-area" style="display:none;">
+    <div id="h-q-waiting">Waiting for next question…</div>
+    <div id="h-q-incoming" style="display:none;"></div>
+  </div>
+
+  <!-- 1D. Prize Area -->
+  <div id="h-prize-area" style="display:none;">
+    <div class="h-sect-lbl" id="h-prize-lbl">Prizes — answer a question to earn a card</div>
+    <div id="h-prize-pills"></div>
+  </div>
+
+  <!-- Ready button (hidden after hider taps ready) -->
+  <div id="h-ready-wrap">
+    <button id="h-ready-btn" onclick="hiderReady()">✓ I'M READY — START THE HUNT</button>
+    <span id="hider-zone-name" style="display:none;"></span>
+  </div>
+
 </div>
 
 <!-- ═════════════════ GAME MAP ═════════════════ -->
@@ -358,6 +442,18 @@ body{background:var(--ink);color:var(--txt);font-family:'DM Sans',sans-serif;ove
     <div class="log-body" id="log-body"></div>
   </div>
   <div class="q-panel" id="q-panel">
+    <div id="seeker-veto-notify" style="display:none;padding:16px;">
+      <div style="font-size:13px;color:#f97316;font-weight:600;text-align:center;margin-bottom:12px;">🛡️ Your question was vetoed by the hider.</div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-out" onclick="seekerReaskSame()" style="flex:1;font-size:12px;">Ask same question</button>
+        <button class="btn btn-out" onclick="seekerAskDifferent()" style="flex:1;font-size:12px;">Ask a different question</button>
+      </div>
+    </div>
+    <div id="seeker-static-countdown" style="display:none;padding:16px;text-align:center;">
+      <div style="font-size:10px;color:#8a8a96;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">〰️ Static active</div>
+      <div style="font-size:22px;color:#e8e8ee;font-weight:500;font-family:'Space Mono',monospace;" id="seeker-static-timer">3:00</div>
+      <div style="font-size:12px;color:#8a8a96;margin-top:4px;">Answer incoming…</div>
+    </div>
     <div class="tabs">
       <button class="tab on" data-t="radar" onclick="switchTab('radar')">Radar</button>
       <button class="tab" data-t="match" onclick="switchTab('match')">Matching</button>
@@ -443,6 +539,30 @@ body{background:var(--ink);color:var(--txt);font-family:'DM Sans',sans-serif;ove
       <div class="arow">
         <button class="btn btn-r" onclick="exitGame()">END GAME</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- Play Popup -->
+<div id="play-popup-backdrop" style="display:none;" onclick="if(event.target===this)closePlayPopup()">
+  <div id="play-popup">
+    <button id="play-popup-close" onclick="closePlayPopup()">✕</button>
+    <div id="play-popup-name"></div>
+    <div id="play-popup-desc"></div>
+    <button id="play-popup-confirm" onclick="playCard()">Apply curse</button>
+  </div>
+</div>
+
+<!-- Keep Popup -->
+<div id="keep-popup-backdrop" style="display:none;" onclick="if(event.target===this)closeKeepPopup()">
+  <div id="keep-popup">
+    <button id="keep-popup-close" onclick="closeKeepPopup()">✕</button>
+    <div id="keep-popup-name"></div>
+    <div id="keep-popup-desc"></div>
+    <button id="keep-popup-confirm" onclick="keepCard()">Keep this card</button>
+    <div id="keep-popup-discard" style="display:none;">
+      <div id="keep-popup-discard-lbl">Your hand is full — choose a card to discard</div>
+      <div id="keep-popup-hand-pills"></div>
     </div>
   </div>
 </div>
@@ -1091,6 +1211,24 @@ let elimRecords=[]; // Serialisable elimination records for Firebase persistence
 let fbUnsubscribe=null; // Firebase listener cleanup
 let pickedTent=null,pinMode=null,pinA=null,pinB=null,pinMarkers={A:null,B:null},pinClick=null;
 let timerInterval=null;
+let gameId=null,gameIdPromise=null,sbChannel=null;
+let hiderStartTime=null,hiderTimerInterval=null,hiderBonusSeconds=0,hiderHand=[];
+let hiderSelfMarker=null;
+let pendingQuestion=null;
+const CARD_POOL=[
+  {name:'Freeze',   category:'Movement',icon:'❄️', description:'Seekers must stand completely still. Their map stays live but they cannot move.'},
+  {name:'Detour',   category:'Movement',icon:'🔀', description:'Point a direction — seekers must walk ¼ mile that way before resuming the hunt.'},
+  {name:'Time Add', category:'Score',   icon:'⏱️', description:'Bank +5 minutes onto your final hiding score. Plays instantly, no effect on seekers.'},
+  {name:'Static',   category:'Jam',     icon:'〰️', description:"The next question's answer is delayed 3 minutes. The hider answers immediately; the seeker waits."},
+  {name:'Veto',     category:'Counter', icon:'🛡️', description:'Reject an incoming question. The seeker re-asks (you draft 2 cards) or asks a different one.'},
+];
+let _keepCard=null,_keepDiscardIdx=null;
+let _playCardRef=null,_playCardIdx=null,hiderCurseInterval=null;
+let vetoedQuestion=null,prizePicks=1,_keepPillIdx=null;
+let staticActive=false,seekerStaticInterval=null;
+let seekerHiderMarker=null,lastSeenTs=null,lastSeenInterval=null;
+let lastSeekerPingPos=null,seekerPingInterval=null;
+const deviceId=(()=>{let id=localStorage.getItem('cvDeviceId');if(!id){id=crypto.randomUUID();localStorage.setItem('cvDeviceId',id);}return id;})();
 
 // ═══════════════════════════════════════════════════════════════════
 // ROLE / NAVIGATION
@@ -1103,19 +1241,48 @@ let timerInterval=null;
 // 5. Hider joins via shared link → sees zone + taps Ready
 // ─────────────────────────────────────────────────────────────────
 
-function launchAsSeeker(){
+async function launchAsSeeker(){
   myRole='seeker';
+  const gId=await gameIdPromise;
+  if(gId){
+    await supabase.from('games').update({seeker_id:deviceId}).eq('id',gId);
+  } else {
+    toast('Failed to create game — check connection','err');
+    return;
+  }
   launchGame();
 }
 
-function launchAsHiderFromSetup(){
-  // The person who set up the game is also the hider
+async function launchAsHiderFromSetup(){
   myRole='hider';
+  const gId=await gameIdPromise;
+  if(gId){
+    await supabase.from('games').update({hider_id:deviceId}).eq('id',gId);
+    subscribeToGame();
+  }
   startHiderMap();
 }
 
 function backToRole(){
   stopGPS();
+  if(sbChannel){sbChannel.unsubscribe();sbChannel=null;}
+  if(hiderTimerInterval){clearInterval(hiderTimerInterval);hiderTimerInterval=null;}
+  if(lastSeenInterval){clearInterval(lastSeenInterval);lastSeenInterval=null;}
+  if(seekerHiderMarker){seekerHiderMarker.remove();seekerHiderMarker=null;}
+  lastSeenTs=null;lastSeekerPingPos=null;
+  staticActive=false;prizePicks=1;
+  if(seekerStaticInterval){clearInterval(seekerStaticInterval);seekerStaticInterval=null;}
+  hiderStartTime=null;hiderBonusSeconds=0;hiderHand=[];hiderSelfMarker=null;
+  // Reset hider screen to pre-ready state for next session
+  document.getElementById('h-ready-wrap').style.display='block';
+  document.getElementById('h-q-area').style.display='none';
+  document.getElementById('h-prize-area').style.display='none';
+  document.getElementById('h-ready-btn').disabled=false;
+  document.getElementById('h-ready-btn').textContent='✓ I\'M READY — START THE HUNT';
+  document.getElementById('h-hiding-time').textContent='0:00';
+  document.getElementById('h-bonus').textContent='+0:00';
+  document.getElementById('h-seekers').textContent='Waiting for ping…';
+  document.getElementById('h-seekers').style.color='#5ba8f5';
   document.getElementById('setup-screen').style.display='flex';
   document.getElementById('hider-screen').style.display='none';
 }
@@ -1148,18 +1315,21 @@ function onNeighbourhoodsReady(){
   document.getElementById('btn-hider-join').disabled = !hasSelection;
 
   if(hasSelection && !gameCode){
-    // Generate code and save game config to Firebase
     gameCode = generateCode();
     document.getElementById('setup-code-display').textContent = gameCode.match(/.{1,3}/g).join('  ');
-    // Write game config to Firebase so hider can load it
-    if(window._fbSet){
-      window._fbSet(`games/${gameCode}/config`,{
-        neighbourhoods: selectedIds,
-        createdAt: Date.now()
-      });
-    }
+    gameIdPromise = supabase.from('games').insert({
+      code: gameCode,
+      hider_id: 'pending',
+      neighbourhood: JSON.stringify(selectedIds)
+    }).select('id').single().then(({data,error})=>{
+      if(error){console.error('Game insert failed:',error);return null;}
+      gameId=data.id;
+      return gameId;
+    });
   } else if(!hasSelection){
-    gameCode = null;
+    gameCode=null;
+    gameId=null;
+    gameIdPromise=null;
   }
 }
 
@@ -1194,21 +1364,16 @@ function startHiderMap(){
   initHiderMap();
 }
 
-function loadGameAndShowHider(code){
-  // Hider joined via link — load game config from Firebase
-  if(window._fbListen){
-    const unsub = window._fbListen(`games/${code}/config`, config=>{
-      unsub(); // one-time read
-      if(!config){toast('Game not found','err');return;}
-      selectedIds = config.neighbourhoods||[];
-      gameCode = code;
-      document.getElementById('setup-screen').style.display='none';
-      document.getElementById('hider-screen').style.display='flex';
-      initHiderMap();
-    });
-  } else {
-    toast('Firebase not ready yet, try again','err');
-  }
+async function loadGameAndShowHider(code){
+  const {data,error}=await supabase.from('games').select('id,neighbourhood').eq('code',code).single();
+  if(error||!data){toast('Game not found','err');return;}
+  gameId=data.id;
+  selectedIds=JSON.parse(data.neighbourhood)||[];
+  gameCode=code;
+  subscribeToGame();
+  document.getElementById('setup-screen').style.display='none';
+  document.getElementById('hider-screen').style.display='flex';
+  initHiderMap();
 }
 
 let hiderMapObj=null;
@@ -1256,62 +1421,148 @@ function initHiderMap(){
 
   // Listen for seeker position
   if(gameCode && window._fbListen){
-    let seekerHiderMarker=null;
     const seekerIcon=L.divIcon({className:'',html:'<div class="seeker-dot"></div>',iconSize:[18,18],iconAnchor:[9,9]});
-    let lastSeenTs=null;
-    let lastSeenInterval=null;
-
-    function updateLastSeenUI(){
-      const el=document.getElementById('seeker-last-seen');
-      const txt=document.getElementById('seeker-last-seen-text');
-      const dot=document.getElementById('seeker-dot-status');
-      if(!el||!lastSeenTs) return;
-      el.style.display='flex';
-      el.style.alignItems='center';
-      const secAgo=Math.floor((Date.now()-lastSeenTs)/1000);
-      if(secAgo<10){
-        txt.textContent='Seeker · live';
-        dot.style.background='var(--go)';
-        dot.style.boxShadow='0 0 6px var(--go)';
-      } else if(secAgo<60){
-        txt.textContent=`Seeker · ${secAgo}s ago`;
-        dot.style.background='var(--volt)';
-        dot.style.boxShadow='none';
-      } else {
-        const minAgo=Math.floor(secAgo/60);
-        txt.textContent=`Seeker · ${minAgo}m ago`;
-        dot.style.background='var(--danger)';
-        dot.style.boxShadow='none';
-      }
-    }
-
     fbUnsubscribe=window._fbListen(`games/${gameCode}/seeker`,pos=>{
       if(!pos||!hiderMapObj) return;
       lastSeenTs=pos.ts||Date.now();
+      lastSeekerPingPos={lat:pos.lat,lng:pos.lng};
       if(!seekerHiderMarker){
         seekerHiderMarker=L.marker([pos.lat,pos.lng],{icon:seekerIcon,zIndexOffset:1000}).addTo(hiderMapObj);
       } else {
         seekerHiderMarker.setLatLng([pos.lat,pos.lng]);
       }
-      updateLastSeenUI();
-      // Start interval to keep "X seconds ago" updating
+      updateHiderSeekerUI();
       if(!lastSeenInterval){
-        lastSeenInterval=setInterval(updateLastSeenUI,5000);
+        lastSeenInterval=setInterval(updateHiderSeekerUI,5000);
       }
     });
   }
 }
 
-function hiderReady(){
-  // Signal to seeker that hider is ready
-  if(gameCode && window._fbSet){
-    window._fbSet(`games/${gameCode}/status`,'ready');
+async function hiderReady(){
+  if(gameId){
+    const {error}=await supabase.from('games').update({
+      status:'active',
+      hider_id:deviceId,
+      started_at:new Date().toISOString()
+    }).eq('id',gameId);
+    if(error) console.error('hiderReady update failed:',error);
   }
+  document.getElementById('h-ready-wrap').style.display='none';
+  document.getElementById('h-q-area').style.display='block';
+  document.getElementById('h-prize-area').style.display='block';
+  startHiderTimer();
+  startGPS('hider');
+  renderHiderDrawer();
+  if(hiderMapObj) setTimeout(()=>hiderMapObj.invalidateSize(),50);
   toast('Seeker has been notified — game on!','go');
-  document.querySelector('#hider-screen button[onclick="hiderReady()"]').textContent='✓ HIDDEN — WAITING FOR SEEKER';
-  document.querySelector('#hider-screen button[onclick="hiderReady()"]').disabled=true;
 }
-// copyLink and shareLink consolidated into shareSetupLink (old hider screen removed)
+// ─── Hider timer ────────────────────────────────────────────────
+function startHiderTimer(){
+  hiderStartTime=Date.now();
+  if(hiderTimerInterval) clearInterval(hiderTimerInterval);
+  hiderTimerInterval=setInterval(()=>{
+    const s=Math.floor((Date.now()-hiderStartTime)/1000);
+    const m=Math.floor(s/60),sec=s%60;
+    const el=document.getElementById('h-hiding-time');
+    if(el) el.textContent=`${m}:${sec.toString().padStart(2,'0')}`;
+  },1000);
+}
+
+// ─── Hand drawer ────────────────────────────────────────────────
+function toggleHiderDrawer(){
+  document.getElementById('h-drawer').classList.toggle('open');
+}
+
+function renderHiderDrawer(){
+  const slots=document.getElementById('h-drawer-slots');
+  if(!slots) return;
+  const count=document.getElementById('h-hand-count');
+  if(count) count.textContent=hiderHand.length;
+  slots.innerHTML='';
+  for(let i=0;i<6;i++){
+    const card=hiderHand[i];
+    const div=document.createElement('div');
+    if(card){
+      const isCurse=card.category!=='Score';
+      div.style.cssText=`padding:9px 12px;border-radius:999px;border:1px solid ${isCurse?'#f97316':'#5ba8f5'};font-size:11px;color:${isCurse?'#fdba74':'#9cc8f7'};text-align:center;cursor:pointer;`;
+      div.textContent=`${card.icon} ${card.name}`;
+      div.addEventListener('click',()=>showPlayPopup(card,i));
+    } else {
+      div.className='h-slot-empty';
+      div.textContent='empty';
+    }
+    slots.appendChild(div);
+  }
+}
+
+// ─── Play popup ─────────────────────────────────────────────────
+function showPlayPopup(card,idx){
+  _playCardRef=card;_playCardIdx=idx;
+  const isCurse=card.category!=='Score';
+  const nameEl=document.getElementById('play-popup-name');
+  nameEl.textContent=`${card.icon} ${card.name}`;
+  nameEl.style.color=isCurse?'#fdba74':'#9cc8f7';
+  const confirmBtn=document.getElementById('play-popup-confirm');
+  if(card.name==='Veto'){
+    document.getElementById('play-popup-desc').textContent='Veto activates automatically when a question arrives. Look for the Veto button below the Yes/No options.';
+    confirmBtn.style.display='none';
+  } else {
+    document.getElementById('play-popup-desc').textContent=card.description;
+    confirmBtn.style.display='';
+    confirmBtn.textContent=card.category==='Score'?'Bank the time':'Apply curse';
+  }
+  document.getElementById('play-popup-backdrop').style.display='flex';
+}
+
+function closePlayPopup(){
+  document.getElementById('play-popup-backdrop').style.display='none';
+  _playCardRef=null;_playCardIdx=null;
+}
+
+async function playCard(){
+  if(_playCardIdx===null||!_playCardRef) return;
+  const card=_playCardRef,idx=_playCardIdx;
+  hiderHand.splice(idx,1);
+  closePlayPopup();
+  renderHiderDrawer();
+  if(card.name==='Time Add'){
+    hiderBonusSeconds+=300;
+    const m=Math.floor(hiderBonusSeconds/60),s=hiderBonusSeconds%60;
+    document.getElementById('h-bonus').textContent=`+${m}:${s.toString().padStart(2,'0')}`;
+    toast('⏱️ +5 min banked!','go');
+  } else {
+    const durations={Freeze:180};
+    const dur=durations[card.name]||null;
+    if(gameId) await supabase.from('game_events').insert({game_id:gameId,event_type:'curse_played',payload:{card:card.name,...(dur?{duration_seconds:dur}:{})}});
+    showCurseBanner(card.name,dur);
+    if(card.name==='Static') staticActive=true;
+  }
+}
+
+function showCurseBanner(name,durationSeconds){
+  if(hiderCurseInterval){clearInterval(hiderCurseInterval);hiderCurseInterval=null;}
+  document.getElementById('h-curse-name').textContent=name;
+  document.getElementById('h-curse-banner').style.display='block';
+  const timeEl=document.getElementById('h-curse-time');
+  if(!durationSeconds){
+    timeEl.textContent=name==='Static'?'next question':'until completed';
+    return;
+  }
+  let remaining=durationSeconds;
+  const tick=()=>{const m=Math.floor(remaining/60),s=remaining%60;timeEl.textContent=`${m}:${s.toString().padStart(2,'0')}`;};
+  tick();
+  hiderCurseInterval=setInterval(()=>{
+    remaining--;
+    if(remaining<=0){
+      clearInterval(hiderCurseInterval);hiderCurseInterval=null;
+      document.getElementById('h-curse-banner').style.display='none';
+      if(gameId) supabase.from('game_events').insert({game_id:gameId,event_type:'curse_expired',payload:{card:name}});
+      return;
+    }
+    tick();
+  },1000);
+}
 
 // ═══════════════════════════════════════════════════════════════════
 // GPS — geolocation + sharing
@@ -1339,13 +1590,18 @@ function startGPS(context){
           ts:Date.now()
         });
       }
-      if(map){
-        if(myRole==='seeker' && seekerMarker){
-          seekerMarker.setLatLng([myPos.lat,myPos.lng]);
-        } else if(myRole==='hider' && seekerMarker){
-          seekerMarker.setLatLng([myPos.lat,myPos.lng]);
-        }
+      if(map && myRole==='seeker'){
+        if(seekerMarker) seekerMarker.setLatLng([myPos.lat,myPos.lng]);
         if(centerOnGPS) map.panTo([myPos.lat,myPos.lng],{animate:true,duration:0.5});
+      }
+      if(hiderMapObj && myRole==='hider'){
+        const hIcon=L.divIcon({className:'',html:'<div class="hider-dot"></div>',iconSize:[18,18],iconAnchor:[9,9]});
+        if(!hiderSelfMarker){
+          hiderSelfMarker=L.marker([myPos.lat,myPos.lng],{icon:hIcon,zIndexOffset:1000}).addTo(hiderMapObj);
+        } else {
+          hiderSelfMarker.setLatLng([myPos.lat,myPos.lng]);
+        }
+        if(centerOnGPS) hiderMapObj.panTo([myPos.lat,myPos.lng],{animate:true,duration:0.5});
       }
     },
     err=>{
@@ -1496,25 +1752,20 @@ function launchGame(){
   document.getElementById('role-badge').innerHTML='<div class="pulse"></div>SEEKING';
   document.getElementById('rejoin-btn').style.display='flex';
   startTimer();
-  // Write initial game state to Firebase
+  // Write initial game state to Firebase (kept for seeker state persistence)
   if(gameCode && window._fbSet){
     window._fbSet(`games/${gameCode}/state`,{
       qCount:0, startedAt:gameStartTime, elimRecords:[], log:[]
     });
-    window._fbSet(`games/${gameCode}/status`,'playing');
   }
+  // Subscribe to Supabase for hider-ready signal and game events
+  subscribeToGame();
+  // Start seeker ping interval (fires immediately, then every 5 min)
+  if(seekerPingInterval) clearInterval(seekerPingInterval);
+  const sendSeekerPing=async()=>{if(!gameId||!myPos) return;await supabase.from('game_events').insert({game_id:gameId,event_type:'seeker_ping',payload:{lat:myPos.lat,lng:myPos.lng}});};
+  sendSeekerPing();
+  seekerPingInterval=setInterval(sendSeekerPing,5*60*1000);
   setTimeout(()=>{map.invalidateSize();renderFog();updateMatchInfo();updateTentPlaces();},100);
-
-  // Listen for hider ready signal
-  if(gameCode && window._fbListen){
-    const readyUnsub=window._fbListen(`games/${gameCode}/status`,status=>{
-      if(status==='ready'){
-        readyUnsub();
-        toast('🎯 Hider is ready — hunt begins!','go');
-        document.getElementById('role-badge').innerHTML='<div class="pulse"></div>HUNTING';
-      }
-    });
-  }
 }
 function startTimer(){
   gameStartTime=Date.now();
@@ -1527,11 +1778,22 @@ function exitGame(){
   if(!confirm('End the game?')) return;
   stopGPS();
   if(timerInterval) clearInterval(timerInterval);
-  // Unsubscribe Firebase listener
+  // Unsubscribe Firebase listener (seeker position on hider map)
   if(fbUnsubscribe){fbUnsubscribe();fbUnsubscribe=null;}
-  if(typeof lastSeenInterval!=='undefined'&&lastSeenInterval){clearInterval(lastSeenInterval);lastSeenInterval=null;}
-  // Clear seeker position from Firebase on game end
+  if(lastSeenInterval){clearInterval(lastSeenInterval);lastSeenInterval=null;}
+  if(seekerPingInterval){clearInterval(seekerPingInterval);seekerPingInterval=null;}
+  if(seekerStaticInterval){clearInterval(seekerStaticInterval);seekerStaticInterval=null;}
+  staticActive=false;
+  document.getElementById('seeker-static-countdown').style.display='none';
+  document.getElementById('q-panel').classList.remove('static-wait');
+  // Unsubscribe Supabase channel
+  if(sbChannel){sbChannel.unsubscribe();sbChannel=null;}
+  // Mark game ended in Supabase
+  if(gameId){supabase.from('games').update({status:'ended'}).eq('id',gameId);gameId=null;}
+  // Clear Firebase game node (state persistence cleanup)
   if(gameCode && window._fbSet) window._fbSet(`games/${gameCode}`,null);
+  if(hiderTimerInterval){clearInterval(hiderTimerInterval);hiderTimerInterval=null;}
+  hiderStartTime=null;hiderBonusSeconds=0;hiderHand=[];hiderSelfMarker=null;
   qCount=0;eliminations=[];refLayers=[];elimShapes=[];elimRecords=[];logEntries=[];selectedIds=[];activePolys=[];
   if(map){zoneGroup.clearLayers();fogGroup.clearLayers();}
   document.getElementById('top-bar').style.display='none';
@@ -1684,6 +1946,10 @@ function insideCircleGeoJSON(lat,lng,radiusMi){
 
 function doRadar(yes){
   const d=+document.getElementById('r-dist').value,sL=myPos.lat,sN=myPos.lng;
+  if(gameId&&myRole==='seeker'){
+    insertQuestionEvent('radar',`Are you within ${d} mi of me?`,{dist:d,sLat:sL,sLng:sN});
+    return;
+  }
   if(yes){
     // YES — inside circle: eliminate everything OUTSIDE the circle
     eliminations.push((a,o)=>distMi(sL,sN,a,o)>d);
@@ -1770,6 +2036,10 @@ function doMatch(same){
   const type=document.getElementById('m-type').value,typeName=document.getElementById('m-type').selectedOptions[0].text;
   const nearest=nearestOf(myPos.lat,myPos.lng,type);if(!nearest) return;
   const sn=nearest.place;
+  if(gameId&&myRole==='seeker'){
+    insertQuestionEvent('match',`Is your nearest ${typeName} the same as mine?`,{placeType:type,typeName,placeName:sn.name});
+    return;
+  }
   addRef(()=>{zonePlaces(type).forEach(p=>{L.circleMarker([p.lat,p.lng],{radius:p.name===sn.name?7:4,color:'#a78bfa',fillColor:p.name===sn.name?'#a78bfa':'#6d28d9',fillOpacity:p.name===sn.name?0.9:0.4,weight:1,interactive:false}).addTo(fogGroup);});});
   let elimFn;
   if(same){
@@ -1791,6 +2061,10 @@ function doMatch(same){
 function doMeasure(ans){
   const v=document.getElementById('lm-sel').value,nm=document.getElementById('lm-sel').selectedOptions[0].text;
   const [la,lo]=v.split(',').map(Number),sd=distMi(myPos.lat,myPos.lng,la,lo);
+  if(gameId&&myRole==='seeker'){
+    insertQuestionEvent('measure',`Compared to ${nm}, are you closer or further than me?`,{la,lo,landmarkName:nm,sd,sLat:myPos.lat,sLng:myPos.lng});
+    return;
+  }
   addRef(()=>{
     L.circleMarker([la,lo],{radius:6,color:'#f0e030',fillColor:'#f0e030',fillOpacity:0.9,weight:0,interactive:false}).addTo(fogGroup);
     L.circle([la,lo],{radius:sd*M2M,color:'#f0e030',weight:1.5,opacity:0.5,fillOpacity:0,dashArray:'6,4',interactive:false}).addTo(fogGroup);
@@ -1842,6 +2116,10 @@ function refreshThermoUI(){
 function doThermo(ans){
   if(!pinA||!pinB) return;
   const A=pinA,B=pinB,d=distMi(A.lat,A.lng,B.lat,B.lng);
+  if(gameId&&myRole==='seeker'){
+    insertQuestionEvent('thermo',`I traveled from A to B (${d.toFixed(1)} mi). Are you hotter or colder?`,{aLat:A.lat,aLng:A.lng,bLat:B.lat,bLng:B.lng,dist:d});
+    return;
+  }
   const mLat=(A.lat+B.lat)/2,mLng=(A.lng+B.lng)/2;
   const dLat=B.lat-A.lat,dLng=B.lng-A.lng,mag=Math.sqrt(dLat*dLat+dLng*dLng);
   const nLat=dLat/mag,nLng=dLng/mag,col=ans==='hotter'?'#ff6b35':'#38bdf8';
@@ -1879,8 +2157,14 @@ function updateTentPlaces(){
 }
 function pickTent(idx){const g=document.getElementById('tent-grid');pickedTent=g._places[idx];g.querySelectorAll('.tent-btn').forEach((b,i)=>b.classList.toggle('on',i===idx));}
 function doTentacles(){
+  const type=document.getElementById('t-type').value,typeName=document.getElementById('t-type').selectedOptions[0].text;
+  if(gameId&&myRole==='seeker'){
+    const nearby=within(myPos.lat,myPos.lng,type,1.0);
+    insertQuestionEvent('tentacles',`Which of these ${typeName} are you closest to?`,{placeType:type,typeName,places:nearby.map(p=>({name:p.name,lat:p.lat,lng:p.lng}))});
+    return;
+  }
   if(!pickedTent){toast('Tap the place first','err');return;}
-  const p=pickedTent,type=document.getElementById('t-type').value,typeName=document.getElementById('t-type').selectedOptions[0].text;
+  const p=pickedTent;
   addRef(()=>L.circleMarker([p.lat,p.lng],{radius:7,color:'#38bdf8',fillColor:'#38bdf8',fillOpacity:0.9,weight:2,interactive:false}).addTo(fogGroup));
   const tentElimFn=(lat,lng)=>{const n=nearestOf(lat,lng,type);return n&&n.place.name!==p.name;};
   eliminations.push(tentElimFn);
@@ -1889,6 +2173,390 @@ function doTentacles(){
   elimRecords.push({type:'tentacles',placeType:type,placeName:p.name});
   log('tent',`Closest ${typeName}: "${p.name}".`);
   pickedTent=null;updateTentPlaces();onAnswer();
+}
+
+// ── SUPABASE REALTIME ─────────────────────────────────────────────
+
+function subscribeToGame(){
+  if(!gameId||sbChannel) return;
+  sbChannel=supabase.channel(`game-${gameId}`)
+    .on('postgres_changes',{event:'UPDATE',schema:'public',table:'games',filter:`id=eq.${gameId}`},payload=>{
+      if(payload.new.status==='active' && myRole==='seeker'){
+        toast('Hider is ready — hunt begins!','go');
+        document.getElementById('role-badge').innerHTML='<div class="pulse"></div>HUNTING';
+      }
+    })
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'game_events',filter:`game_id=eq.${gameId}`},handleGameEvent)
+    .subscribe();
+}
+
+async function insertQuestionEvent(type,text,params){
+  pendingQuestion={type,text,params};
+  setSeekerQuestionPending(true);
+  const{error}=await supabase.from('game_events').insert({game_id:gameId,event_type:'question',payload:{type,text,params}});
+  if(error){console.error('insertQuestionEvent:',error);pendingQuestion=null;setSeekerQuestionPending(false);toast('Failed to send question','err');}
+}
+
+function setSeekerQuestionPending(pending){
+  document.querySelectorAll('.arow button').forEach(b=>b.disabled=pending);
+  if(!pending) refreshThermoUI();
+}
+
+function showHiderIncomingQuestion(q){
+  document.getElementById('h-q-waiting').style.display='none';
+  const el=document.getElementById('h-q-incoming');
+  el.style.display='';
+  let btnsHtml;
+  if(q.type==='tentacles'){
+    btnsHtml='<div class="tent-grid">'+q.params.places.map(p=>`<button class="tent-btn" data-name="${p.name.replace(/"/g,'&quot;')}">${p.name}</button>`).join('')+'</div>';
+  } else {
+    const map={radar:['yes','Yes','no','No'],match:['yes','Yes','no','No'],measure:['closer','Closer','further','Further'],thermo:['hotter','Hotter','colder','Colder']};
+    const[ansA,lblA,ansB,lblB]=map[q.type]||['yes','Yes','no','No'];
+    btnsHtml=`<div class="arow"><button class="btn btn-g h-ans-btn" data-ans="${ansA}">${lblA}</button><button class="btn btn-r h-ans-btn" data-ans="${ansB}">${lblB}</button></div>`;
+  }
+  const hasVeto=prizePicks===1&&hiderHand.some(c=>c.name==='Veto');
+  if(hasVeto) btnsHtml+=`<div style="margin-top:8px;"><button class="h-veto-btn" style="width:100%;padding:10px;border-radius:8px;background:#1a0a22;border:1px solid #a060f0;color:#c87ff5;font-family:'Space Mono',monospace;font-size:13px;cursor:pointer;">🛡️ Veto this question</button></div>`;
+  el.innerHTML=`<div class="h-q-text">${q.text}</div>${btnsHtml}`;
+  if(q.type==='tentacles'){
+    el.querySelectorAll('.tent-btn').forEach(btn=>btn.addEventListener('click',()=>hiderAnswer(btn.dataset.name)));
+  } else {
+    el.querySelectorAll('.h-ans-btn').forEach(btn=>btn.addEventListener('click',()=>hiderAnswer(btn.dataset.ans)));
+  }
+  const vetoBtn=el.querySelector('.h-veto-btn');
+  if(vetoBtn) vetoBtn.addEventListener('click',()=>hiderVeto(q));
+}
+
+async function hiderAnswer(answer){
+  if(!gameId) return;
+  if(staticActive){
+    staticActive=false;
+    document.getElementById('h-curse-banner').style.display='none';
+    if(hiderCurseInterval){clearInterval(hiderCurseInterval);hiderCurseInterval=null;}
+    await supabase.from('game_events').insert({game_id:gameId,event_type:'static_delay',payload:{answer,delay_seconds:180}});
+  } else {
+    await supabase.from('game_events').insert({game_id:gameId,event_type:'answer',payload:{answer}});
+  }
+  document.getElementById('h-q-incoming').style.display='none';
+  document.getElementById('h-q-incoming').innerHTML='';
+  document.getElementById('h-q-waiting').style.display='';
+  showPrizeDraft();
+}
+
+function showPrizeDraft(){
+  const prizes=Array.from({length:3},()=>CARD_POOL[Math.floor(Math.random()*CARD_POOL.length)]);
+  document.getElementById('h-prize-lbl').textContent=prizePicks>1?`Veto bonus — pick ${prizePicks} cards this round`:'Prizes — pick 1 to keep in your hand';
+  const pills=document.getElementById('h-prize-pills');
+  pills.innerHTML='';
+  prizes.forEach((card,i)=>{
+    const isCurse=card.category!=='Score';
+    const btn=document.createElement('button');
+    btn.className='prize-pill';
+    btn.dataset.pillIdx=i;
+    btn.style.cssText=`border-color:${isCurse?'#f97316':'#5ba8f5'};color:${isCurse?'#fdba74':'#9cc8f7'};`;
+    btn.textContent=`${card.icon} ${card.name}`;
+    btn.addEventListener('click',()=>showKeepPopup(card,i));
+    pills.appendChild(btn);
+  });
+}
+
+function showKeepPopup(card,pillIdx){
+  _keepCard=card;
+  _keepDiscardIdx=null;
+  _keepPillIdx=pillIdx??null;
+  const isCurse=card.category!=='Score';
+  const nameEl=document.getElementById('keep-popup-name');
+  nameEl.textContent=`${card.icon} ${card.name}`;
+  nameEl.style.color=isCurse?'#fdba74':'#9cc8f7';
+  document.getElementById('keep-popup-desc').textContent=card.description;
+  const handFull=hiderHand.length>=6;
+  const discardEl=document.getElementById('keep-popup-discard');
+  const confirmBtn=document.getElementById('keep-popup-confirm');
+  if(handFull){
+    discardEl.style.display='';
+    const pillsCon=document.getElementById('keep-popup-hand-pills');
+    pillsCon.innerHTML='';
+    hiderHand.forEach((c,i)=>{
+      const btn=document.createElement('button');
+      btn.className='discard-pill';
+      const ic=c.category!=='Score';
+      btn.style.cssText=`border-color:${ic?'#f97316':'#5ba8f5'};color:${ic?'#fdba74':'#9cc8f7'};`;
+      btn.textContent=`${c.icon} ${c.name}`;
+      btn.addEventListener('click',()=>{
+        pillsCon.querySelectorAll('.discard-pill').forEach(b=>b.classList.remove('sel'));
+        btn.classList.add('sel');
+        _keepDiscardIdx=i;
+        confirmBtn.disabled=false;
+      });
+      pillsCon.appendChild(btn);
+    });
+    confirmBtn.disabled=true;
+  } else {
+    discardEl.style.display='none';
+    confirmBtn.disabled=false;
+  }
+  document.getElementById('keep-popup-backdrop').style.display='flex';
+}
+
+function closeKeepPopup(){
+  document.getElementById('keep-popup-backdrop').style.display='none';
+  _keepCard=null;_keepDiscardIdx=null;_keepPillIdx=null;
+}
+
+function keepCard(){
+  if(!_keepCard) return;
+  if(hiderHand.length>=6){
+    if(_keepDiscardIdx===null) return;
+    hiderHand.splice(_keepDiscardIdx,1);
+  }
+  const keptPillIdx=_keepPillIdx;
+  hiderHand.push(_keepCard);
+  closeKeepPopup();
+  renderHiderDrawer();
+  const drawer=document.getElementById('h-drawer');
+  const wasOpen=drawer.classList.contains('open');
+  drawer.classList.add('open');
+  if(!wasOpen) setTimeout(()=>drawer.classList.remove('open'),2000);
+  if(prizePicks>1){
+    prizePicks--;
+    const pill=document.getElementById('h-prize-pills').querySelector(`[data-pill-idx="${keptPillIdx}"]`);
+    if(pill) pill.remove();
+    document.getElementById('h-prize-lbl').textContent='Veto bonus — pick 1 more card';
+  } else {
+    prizePicks=1;
+    document.getElementById('h-prize-lbl').textContent='Prizes — answer a question to earn a card';
+    document.getElementById('h-prize-pills').innerHTML='';
+  }
+}
+
+function handleGameEvent(payload){
+  const evt=payload.new;
+  if(evt.event_type==='question'&&myRole==='hider'){
+    showHiderIncomingQuestion(evt.payload);
+  } else if(evt.event_type==='answer'&&myRole==='seeker'){
+    if(!pendingQuestion) return;
+    const q=pendingQuestion;
+    pendingQuestion=null;
+    setSeekerQuestionPending(false);
+    switch(q.type){
+      case 'radar':     processRadarAnswer(q.params,evt.payload.answer);    break;
+      case 'match':     processMatchAnswer(q.params,evt.payload.answer);    break;
+      case 'measure':   processMeasureAnswer(q.params,evt.payload.answer);  break;
+      case 'thermo':    processThermoAnswer(q.params,evt.payload.answer);   break;
+      case 'tentacles': processTentaclesAnswer(q.params,evt.payload.answer);break;
+    }
+  } else if(evt.event_type==='veto'&&myRole==='seeker'){
+    vetoedQuestion=pendingQuestion;
+    pendingQuestion=null;
+    showSeekerVetoNotification();
+  } else if(evt.event_type==='veto_response'&&myRole==='hider'){
+    document.getElementById('h-q-waiting').textContent='Waiting for next question…';
+    if(evt.payload.action==='re-ask') prizePicks=2;
+  } else if(evt.event_type==='seeker_ping'&&myRole==='hider'){
+    handleSeekerPing(evt.payload.lat,evt.payload.lng);
+  } else if(evt.event_type==='static_delay'&&myRole==='seeker'){
+    startSeekerStaticCountdown(evt.payload.answer,evt.payload.delay_seconds||180);
+  }
+}
+
+function startSeekerStaticCountdown(answer,delaySecs){
+  if(seekerStaticInterval){clearInterval(seekerStaticInterval);seekerStaticInterval=null;}
+  const cdEl=document.getElementById('seeker-static-countdown');
+  const timerEl=document.getElementById('seeker-static-timer');
+  cdEl.style.display='';
+  document.getElementById('q-panel').classList.add('static-wait');
+  let remaining=delaySecs;
+  const tick=()=>{const m=Math.floor(remaining/60),s=remaining%60;timerEl.textContent=`${m}:${s.toString().padStart(2,'0')}`;};
+  tick();
+  seekerStaticInterval=setInterval(()=>{
+    remaining--;
+    if(remaining<=0){
+      clearInterval(seekerStaticInterval);seekerStaticInterval=null;
+      cdEl.style.display='none';
+      document.getElementById('q-panel').classList.remove('static-wait');
+      if(!pendingQuestion) return;
+      const q=pendingQuestion;
+      pendingQuestion=null;
+      setSeekerQuestionPending(false);
+      switch(q.type){
+        case 'radar':     processRadarAnswer(q.params,answer);    break;
+        case 'match':     processMatchAnswer(q.params,answer);    break;
+        case 'measure':   processMeasureAnswer(q.params,answer);  break;
+        case 'thermo':    processThermoAnswer(q.params,answer);   break;
+        case 'tentacles': processTentaclesAnswer(q.params,answer);break;
+      }
+      return;
+    }
+    tick();
+  },1000);
+}
+
+function updateHiderSeekerUI(){
+  const el=document.getElementById('h-seekers');
+  if(!el||!lastSeenTs) return;
+  const minAgo=Math.floor((Date.now()-lastSeenTs)/60000);
+  let distStr='';
+  if(lastSeekerPingPos&&myPos){
+    distStr=distMi(myPos.lat,myPos.lng,lastSeekerPingPos.lat,lastSeekerPingPos.lng).toFixed(1)+' mi — ';
+  }
+  el.textContent=distStr+(minAgo<1?'just now':`${minAgo} min ago`);
+  el.style.color='#5ba8f5';
+}
+
+function handleSeekerPing(lat,lng){
+  lastSeenTs=Date.now();
+  lastSeekerPingPos={lat,lng};
+  if(hiderMapObj){
+    if(!seekerHiderMarker){
+      const icon=L.divIcon({className:'',html:'<div class="seeker-dot"></div>',iconSize:[18,18],iconAnchor:[9,9]});
+      seekerHiderMarker=L.marker([lat,lng],{icon,zIndexOffset:1000}).addTo(hiderMapObj);
+    } else {
+      seekerHiderMarker.setLatLng([lat,lng]);
+    }
+  }
+  updateHiderSeekerUI();
+  if(!lastSeenInterval){
+    lastSeenInterval=setInterval(updateHiderSeekerUI,60000);
+  }
+}
+
+async function hiderVeto(q){
+  const idx=hiderHand.findIndex(c=>c.name==='Veto');
+  if(idx===-1) return;
+  hiderHand.splice(idx,1);
+  renderHiderDrawer();
+  document.getElementById('h-q-incoming').style.display='none';
+  document.getElementById('h-q-incoming').innerHTML='';
+  const waitEl=document.getElementById('h-q-waiting');
+  waitEl.textContent='Question vetoed. Waiting for seeker\'s response…';
+  waitEl.style.display='';
+  if(gameId) await supabase.from('game_events').insert({game_id:gameId,event_type:'veto',payload:{}});
+}
+
+function showSeekerVetoNotification(){
+  document.getElementById('seeker-veto-notify').style.display='';
+  document.getElementById('q-panel').classList.add('veto-active');
+}
+
+function hideSeekerVetoNotification(){
+  document.getElementById('seeker-veto-notify').style.display='none';
+  document.getElementById('q-panel').classList.remove('veto-active');
+}
+
+async function seekerReaskSame(){
+  if(!vetoedQuestion) return;
+  const q=vetoedQuestion;
+  vetoedQuestion=null;
+  hideSeekerVetoNotification();
+  if(gameId) await supabase.from('game_events').insert({game_id:gameId,event_type:'veto_response',payload:{action:'re-ask'}});
+  await insertQuestionEvent(q.type,q.text,q.params);
+}
+
+async function seekerAskDifferent(){
+  vetoedQuestion=null;
+  hideSeekerVetoNotification();
+  setSeekerQuestionPending(false);
+  if(gameId) await supabase.from('game_events').insert({game_id:gameId,event_type:'veto_response',payload:{action:'different'}});
+}
+
+function processRadarAnswer(params,answer){
+  const{dist:d,sLat:sL,sLng:sN}=params;
+  if(answer==='yes'){
+    eliminations.push((a,o)=>distMi(sL,sN,a,o)>d);
+    elimShapes.push(outsideCircleGeoJSON(sL,sN,d));
+    elimRecords.push({type:'radar',sLat:sL,sLng:sN,distMi:d,inside:true});
+    addRef(()=>L.circle([sL,sN],{radius:d*M2M,color:'#00e87a',weight:1.5,opacity:0.6,fillOpacity:0,dashArray:'7,4',interactive:false}).addTo(fogGroup));
+    log('radar',`Within ${d} mi — YES. Outside eliminated.`);
+  } else {
+    eliminations.push((a,o)=>distMi(sL,sN,a,o)<=d);
+    elimShapes.push(insideCircleGeoJSON(sL,sN,d));
+    elimRecords.push({type:'radar',sLat:sL,sLng:sN,distMi:d,inside:false});
+    addRef(()=>L.circle([sL,sN],{radius:d*M2M,color:'#ff4060',weight:1.5,opacity:0.6,fillOpacity:0,dashArray:'7,4',interactive:false}).addTo(fogGroup));
+    log('radar',`Within ${d} mi — NO. Inside eliminated.`);
+  }
+  onAnswer();
+}
+
+function processMatchAnswer(params,answer){
+  const{placeType:type,typeName,placeName:snName}=params;
+  addRef(()=>{zonePlaces(type).forEach(p=>{L.circleMarker([p.lat,p.lng],{radius:p.name===snName?7:4,color:'#a78bfa',fillColor:p.name===snName?'#a78bfa':'#6d28d9',fillOpacity:p.name===snName?0.9:0.4,weight:1,interactive:false}).addTo(fogGroup);});});
+  let elimFn;
+  if(answer==='yes'){
+    elimFn=(lat,lng)=>{const n=nearestOf(lat,lng,type);return n&&n.place.name!==snName;};
+    eliminations.push(elimFn);
+    elimRecords.push({type:'match',placeType:type,placeName:snName,same:true});
+    log('match',`Nearest ${typeName} SAME (${snName}).`);
+  } else {
+    elimFn=(lat,lng)=>{const n=nearestOf(lat,lng,type);return n&&n.place.name===snName;};
+    eliminations.push(elimFn);
+    elimRecords.push({type:'match',placeType:type,placeName:snName,same:false});
+    log('match',`Nearest ${typeName} DIFFERENT.`);
+  }
+  const shape=buildElimShape(elimFn);
+  if(shape) elimShapes.push(shape);
+  onAnswer();
+}
+
+function processMeasureAnswer(params,answer){
+  const{la,lo,landmarkName:nm,sd,sLat,sLng}=params;
+  addRef(()=>{
+    L.circleMarker([la,lo],{radius:6,color:'#f0e030',fillColor:'#f0e030',fillOpacity:0.9,weight:0,interactive:false}).addTo(fogGroup);
+    L.circle([la,lo],{radius:sd*M2M,color:'#f0e030',weight:1.5,opacity:0.5,fillOpacity:0,dashArray:'6,4',interactive:false}).addTo(fogGroup);
+  });
+  const mLat=(sLat+la)/2,mLng=(sLng+lo)/2;
+  const dLat=sLat-la,dLng=sLng-lo,mag=Math.sqrt(dLat*dLat+dLng*dLng);
+  const nLat=dLat/mag,nLng=dLng/mag;
+  if(answer==='closer'){
+    eliminations.push((a,o)=>distMi(a,o,la,lo)>=sd);
+    elimShapes.push(halfPlaneGeoJSON(mLat,mLng,nLat,nLng,1));
+    elimRecords.push({type:'measure',la,lo,landmarkName:nm,sd,sLat,sLng,ans:'closer'});
+    log('measure',`Closer to ${nm}. Far side eliminated.`);
+  } else {
+    eliminations.push((a,o)=>distMi(a,o,la,lo)<sd);
+    elimShapes.push(halfPlaneGeoJSON(mLat,mLng,nLat,nLng,-1));
+    elimRecords.push({type:'measure',la,lo,landmarkName:nm,sd,sLat,sLng,ans:'further'});
+    log('measure',`Further from ${nm}. Near side eliminated.`);
+  }
+  onAnswer();
+}
+
+function processThermoAnswer(params,answer){
+  const{aLat,aLng,bLat,bLng}=params;
+  const A={lat:aLat,lng:aLng},B={lat:bLat,lng:bLng};
+  const d=distMi(A.lat,A.lng,B.lat,B.lng);
+  const mLat=(A.lat+B.lat)/2,mLng=(A.lng+B.lng)/2;
+  const dLat=B.lat-A.lat,dLng=B.lng-A.lng,mag=Math.sqrt(dLat*dLat+dLng*dLng);
+  const nLat=dLat/mag,nLng=dLng/mag,col=answer==='hotter'?'#ff6b35':'#38bdf8';
+  addRef(()=>{
+    L.polyline([[A.lat,A.lng],[B.lat,B.lng]],{color:col,weight:2.5,opacity:0.7,interactive:false}).addTo(fogGroup);
+    L.circleMarker([A.lat,A.lng],{radius:4,color:'#ff6b35',fillColor:'#ff6b35',fillOpacity:0.8,weight:0,interactive:false}).addTo(fogGroup);
+    L.circleMarker([B.lat,B.lng],{radius:4,color:'#38bdf8',fillColor:'#38bdf8',fillOpacity:0.8,weight:0,interactive:false}).addTo(fogGroup);
+  });
+  if(answer==='hotter'){
+    eliminations.push((lat,lng)=>(lat-mLat)*nLat+(lng-mLng)*nLng<0);
+    elimShapes.push(halfPlaneGeoJSON(mLat,mLng,nLat,nLng,-1));
+    elimRecords.push({type:'thermo',aLat:A.lat,aLng:A.lng,bLat:B.lat,bLng:B.lng,ans:'hotter'});
+    log('thermo',`A→B (${d.toFixed(1)}mi) — HOTTER. Behind bisector eliminated.`);
+  } else {
+    eliminations.push((lat,lng)=>(lat-mLat)*nLat+(lng-mLng)*nLng>=0);
+    elimShapes.push(halfPlaneGeoJSON(mLat,mLng,nLat,nLng,1));
+    elimRecords.push({type:'thermo',aLat:A.lat,aLng:A.lng,bLat:B.lat,bLng:B.lng,ans:'colder'});
+    log('thermo',`A→B (${d.toFixed(1)}mi) — COLDER. Ahead of bisector eliminated.`);
+  }
+  onAnswer();
+}
+
+function processTentaclesAnswer(params,answer){
+  const{placeType:type,typeName,places}=params;
+  const p=places.find(pl=>pl.name===answer);
+  if(!p) return;
+  addRef(()=>L.circleMarker([p.lat,p.lng],{radius:7,color:'#38bdf8',fillColor:'#38bdf8',fillOpacity:0.9,weight:2,interactive:false}).addTo(fogGroup));
+  const tentElimFn=(lat,lng)=>{const n=nearestOf(lat,lng,type);return n&&n.place.name!==p.name;};
+  eliminations.push(tentElimFn);
+  const tentShape=buildElimShape(tentElimFn);
+  if(tentShape) elimShapes.push(tentShape);
+  elimRecords.push({type:'tentacles',placeType:type,placeName:p.name});
+  log('tent',`Closest ${typeName}: "${p.name}".`);
+  onAnswer();
 }
 
 // ── STATE PERSISTENCE ────────────────────────────────────────────
@@ -2046,41 +2714,34 @@ function checkUrlJoin(){
 async function rejoinAsSeeker(code){
   myRole='seeker';
   gameCode=code;
-  // Load config first
-  if(!window._fbListen){toast('Firebase not ready','err');return;}
-  const configUnsub=window._fbListen(`games/${code}/config`,async config=>{
-    configUnsub();
-    if(!config){toast('Game not found','err');return;}
-    selectedIds=config.neighbourhoods||[];
-    activePolys=selectedIds.map(id=>({id,poly:POLY[id]}));
-    // Hide setup, show game UI
-    document.getElementById('setup-screen').style.display='none';
-    document.getElementById('top-bar').style.display='block';
-    document.getElementById('bottom-bar').style.display='block';
-    document.getElementById('gps-btn').style.display='flex';
-    document.getElementById('role-badge').className='role-badge seeker';
-    document.getElementById('role-badge').innerHTML='<div class="pulse"></div>SEEKING';
-    const names=HOODS.filter(h=>selectedIds.includes(h.id)).map(h=>h.name);
-    document.getElementById('zone-strip').textContent=
-      names.length<=4?names.join(' · '):`${names.slice(0,3).join(' · ')} +${names.length-3} more`;
-    if(!map) initMap();
-    // Draw zone borders
-    activePolys.forEach(({poly})=>{
-      L.polygon(poly,{color:'#00e87a',weight:2,opacity:0.55,fillColor:'#00e87a',fillOpacity:0.05,dashArray:'8,5',interactive:false}).addTo(zoneGroup);
-    });
-    // Restore game state (eliminations, log, timer)
-    const restored=await restoreGameState(code);
-    if(restored){
-      toast('Game restored ✓','go');
-    }
-    setTimeout(()=>{map.invalidateSize();renderFog();updateMatchInfo();updateTentPlaces();},100);
-    // Restart GPS
-    startGPS('seeker');
-    // Restart timer from saved startedAt
-    if(timerInterval) clearInterval(timerInterval);
-    timerInterval=setInterval(()=>document.getElementById('s-t').textContent=elapsedStr(),1000);
-    document.getElementById('s-z').textContent=zonePct()+'%';
+  const {data,error}=await supabase.from('games').select('id,neighbourhood').eq('code',code).single();
+  if(error||!data){toast('Game not found','err');return;}
+  gameId=data.id;
+  selectedIds=JSON.parse(data.neighbourhood)||[];
+  activePolys=selectedIds.map(id=>({id,poly:POLY[id]}));
+  // Hide setup, show game UI
+  document.getElementById('setup-screen').style.display='none';
+  document.getElementById('top-bar').style.display='block';
+  document.getElementById('bottom-bar').style.display='block';
+  document.getElementById('gps-btn').style.display='flex';
+  document.getElementById('role-badge').className='role-badge seeker';
+  document.getElementById('role-badge').innerHTML='<div class="pulse"></div>SEEKING';
+  const names=HOODS.filter(h=>selectedIds.includes(h.id)).map(h=>h.name);
+  document.getElementById('zone-strip').textContent=
+    names.length<=4?names.join(' · '):`${names.slice(0,3).join(' · ')} +${names.length-3} more`;
+  if(!map) initMap();
+  activePolys.forEach(({poly})=>{
+    L.polygon(poly,{color:'#00e87a',weight:2,opacity:0.55,fillColor:'#00e87a',fillOpacity:0.05,dashArray:'8,5',interactive:false}).addTo(zoneGroup);
   });
+  // Restore game state (eliminations, log, timer) from Firebase
+  const restored=await restoreGameState(code);
+  if(restored) toast('Game restored ✓','go');
+  subscribeToGame();
+  setTimeout(()=>{map.invalidateSize();renderFog();updateMatchInfo();updateTentPlaces();},100);
+  startGPS('seeker');
+  if(timerInterval) clearInterval(timerInterval);
+  timerInterval=setInterval(()=>document.getElementById('s-t').textContent=elapsedStr(),1000);
+  document.getElementById('s-z').textContent=zonePct()+'%';
 }
 
 window.addEventListener('DOMContentLoaded',()=>{
