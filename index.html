@@ -48,7 +48,7 @@ try {
 <script>
   const SUPABASE_URL = 'https://vndukliiuhazjwvmjnpq.supabase.co';
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZuZHVrbGlpdWhhemp3dm1qbnBxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzNzg3MTksImV4cCI6MjA5Njk1NDcxOX0.C0z0YMASImuGgEN0Xt9ju7G-iHPXwuJ6c5t9J5cBXwU';
-  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   console.log('Supabase ready');
 </script>
 <style>
@@ -1245,7 +1245,7 @@ async function launchAsSeeker(){
   myRole='seeker';
   const gId=await gameIdPromise;
   if(gId){
-    await supabase.from('games').update({seeker_id:deviceId}).eq('id',gId);
+    await sbClient.from('games').update({seeker_id:deviceId}).eq('id',gId);
   } else {
     toast('Failed to create game — check connection','err');
     return;
@@ -1257,7 +1257,7 @@ async function launchAsHiderFromSetup(){
   myRole='hider';
   const gId=await gameIdPromise;
   if(gId){
-    await supabase.from('games').update({hider_id:deviceId}).eq('id',gId);
+    await sbClient.from('games').update({hider_id:deviceId}).eq('id',gId);
     subscribeToGame();
   }
   startHiderMap();
@@ -1317,7 +1317,7 @@ function onNeighbourhoodsReady(){
   if(hasSelection && !gameCode){
     gameCode = generateCode();
     document.getElementById('setup-code-display').textContent = gameCode.match(/.{1,3}/g).join('  ');
-    gameIdPromise = supabase.from('games').insert({
+    gameIdPromise = sbClient.from('games').insert({
       code: gameCode,
       hider_id: 'pending',
       neighbourhood: JSON.stringify(selectedIds)
@@ -1365,7 +1365,7 @@ function startHiderMap(){
 }
 
 async function loadGameAndShowHider(code){
-  const {data,error}=await supabase.from('games').select('id,neighbourhood').eq('code',code).single();
+  const {data,error}=await sbClient.from('games').select('id,neighbourhood').eq('code',code).single();
   if(error||!data){toast('Game not found','err');return;}
   gameId=data.id;
   selectedIds=JSON.parse(data.neighbourhood)||[];
@@ -1441,7 +1441,7 @@ function initHiderMap(){
 
 async function hiderReady(){
   if(gameId){
-    const {error}=await supabase.from('games').update({
+    const {error}=await sbClient.from('games').update({
       status:'active',
       hider_id:deviceId,
       started_at:new Date().toISOString()
@@ -1534,7 +1534,7 @@ async function playCard(){
   } else {
     const durations={Freeze:180};
     const dur=durations[card.name]||null;
-    if(gameId) await supabase.from('game_events').insert({game_id:gameId,event_type:'curse_played',payload:{card:card.name,...(dur?{duration_seconds:dur}:{})}});
+    if(gameId) await sbClient.from('game_events').insert({game_id:gameId,event_type:'curse_played',payload:{card:card.name,...(dur?{duration_seconds:dur}:{})}});
     showCurseBanner(card.name,dur);
     if(card.name==='Static') staticActive=true;
   }
@@ -1557,7 +1557,7 @@ function showCurseBanner(name,durationSeconds){
     if(remaining<=0){
       clearInterval(hiderCurseInterval);hiderCurseInterval=null;
       document.getElementById('h-curse-banner').style.display='none';
-      if(gameId) supabase.from('game_events').insert({game_id:gameId,event_type:'curse_expired',payload:{card:name}});
+      if(gameId) sbClient.from('game_events').insert({game_id:gameId,event_type:'curse_expired',payload:{card:name}});
       return;
     }
     tick();
@@ -1762,7 +1762,7 @@ function launchGame(){
   subscribeToGame();
   // Start seeker ping interval (fires immediately, then every 5 min)
   if(seekerPingInterval) clearInterval(seekerPingInterval);
-  const sendSeekerPing=async()=>{if(!gameId||!myPos) return;await supabase.from('game_events').insert({game_id:gameId,event_type:'seeker_ping',payload:{lat:myPos.lat,lng:myPos.lng}});};
+  const sendSeekerPing=async()=>{if(!gameId||!myPos) return;await sbClient.from('game_events').insert({game_id:gameId,event_type:'seeker_ping',payload:{lat:myPos.lat,lng:myPos.lng}});};
   sendSeekerPing();
   seekerPingInterval=setInterval(sendSeekerPing,5*60*1000);
   setTimeout(()=>{map.invalidateSize();renderFog();updateMatchInfo();updateTentPlaces();},100);
@@ -1789,7 +1789,7 @@ function exitGame(){
   // Unsubscribe Supabase channel
   if(sbChannel){sbChannel.unsubscribe();sbChannel=null;}
   // Mark game ended in Supabase
-  if(gameId){supabase.from('games').update({status:'ended'}).eq('id',gameId);gameId=null;}
+  if(gameId){sbClient.from('games').update({status:'ended'}).eq('id',gameId);gameId=null;}
   // Clear Firebase game node (state persistence cleanup)
   if(gameCode && window._fbSet) window._fbSet(`games/${gameCode}`,null);
   if(hiderTimerInterval){clearInterval(hiderTimerInterval);hiderTimerInterval=null;}
@@ -2179,7 +2179,7 @@ function doTentacles(){
 
 function subscribeToGame(){
   if(!gameId||sbChannel) return;
-  sbChannel=supabase.channel(`game-${gameId}`)
+  sbChannel=sbClient.channel(`game-${gameId}`)
     .on('postgres_changes',{event:'UPDATE',schema:'public',table:'games',filter:`id=eq.${gameId}`},payload=>{
       if(payload.new.status==='active' && myRole==='seeker'){
         toast('Hider is ready — hunt begins!','go');
@@ -2193,7 +2193,7 @@ function subscribeToGame(){
 async function insertQuestionEvent(type,text,params){
   pendingQuestion={type,text,params};
   setSeekerQuestionPending(true);
-  const{error}=await supabase.from('game_events').insert({game_id:gameId,event_type:'question',payload:{type,text,params}});
+  const{error}=await sbClient.from('game_events').insert({game_id:gameId,event_type:'question',payload:{type,text,params}});
   if(error){console.error('insertQuestionEvent:',error);pendingQuestion=null;setSeekerQuestionPending(false);toast('Failed to send question','err');}
 }
 
@@ -2232,9 +2232,9 @@ async function hiderAnswer(answer){
     staticActive=false;
     document.getElementById('h-curse-banner').style.display='none';
     if(hiderCurseInterval){clearInterval(hiderCurseInterval);hiderCurseInterval=null;}
-    await supabase.from('game_events').insert({game_id:gameId,event_type:'static_delay',payload:{answer,delay_seconds:180}});
+    await sbClient.from('game_events').insert({game_id:gameId,event_type:'static_delay',payload:{answer,delay_seconds:180}});
   } else {
-    await supabase.from('game_events').insert({game_id:gameId,event_type:'answer',payload:{answer}});
+    await sbClient.from('game_events').insert({game_id:gameId,event_type:'answer',payload:{answer}});
   }
   document.getElementById('h-q-incoming').style.display='none';
   document.getElementById('h-q-incoming').innerHTML='';
@@ -2429,7 +2429,7 @@ async function hiderVeto(q){
   const waitEl=document.getElementById('h-q-waiting');
   waitEl.textContent='Question vetoed. Waiting for seeker\'s response…';
   waitEl.style.display='';
-  if(gameId) await supabase.from('game_events').insert({game_id:gameId,event_type:'veto',payload:{}});
+  if(gameId) await sbClient.from('game_events').insert({game_id:gameId,event_type:'veto',payload:{}});
 }
 
 function showSeekerVetoNotification(){
@@ -2447,7 +2447,7 @@ async function seekerReaskSame(){
   const q=vetoedQuestion;
   vetoedQuestion=null;
   hideSeekerVetoNotification();
-  if(gameId) await supabase.from('game_events').insert({game_id:gameId,event_type:'veto_response',payload:{action:'re-ask'}});
+  if(gameId) await sbClient.from('game_events').insert({game_id:gameId,event_type:'veto_response',payload:{action:'re-ask'}});
   await insertQuestionEvent(q.type,q.text,q.params);
 }
 
@@ -2455,7 +2455,7 @@ async function seekerAskDifferent(){
   vetoedQuestion=null;
   hideSeekerVetoNotification();
   setSeekerQuestionPending(false);
-  if(gameId) await supabase.from('game_events').insert({game_id:gameId,event_type:'veto_response',payload:{action:'different'}});
+  if(gameId) await sbClient.from('game_events').insert({game_id:gameId,event_type:'veto_response',payload:{action:'different'}});
 }
 
 function processRadarAnswer(params,answer){
@@ -2714,7 +2714,7 @@ function checkUrlJoin(){
 async function rejoinAsSeeker(code){
   myRole='seeker';
   gameCode=code;
-  const {data,error}=await supabase.from('games').select('id,neighbourhood').eq('code',code).single();
+  const {data,error}=await sbClient.from('games').select('id,neighbourhood').eq('code',code).single();
   if(error||!data){toast('Game not found','err');return;}
   gameId=data.id;
   selectedIds=JSON.parse(data.neighbourhood)||[];
