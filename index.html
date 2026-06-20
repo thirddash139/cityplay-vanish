@@ -152,7 +152,7 @@ body{background:var(--ink);color:var(--txt);font-family:'DM Sans',sans-serif;ove
 .h-stat-val{font-family:'Space Mono',monospace;font-size:18px;font-weight:700;color:#e8e8ee;line-height:1.1;}
 #h-map-wrap{position:relative;flex:1;min-height:0;overflow:hidden;}
 #hider-map{position:absolute;inset:0;}
-#h-hand-btn{position:absolute;top:10px;left:10px;z-index:200;display:flex;align-items:center;gap:5px;padding:7px 11px;border-radius:10px;background:#1a1a22;border:1px solid #3a3a44;font-family:'Space Mono',monospace;font-size:11px;color:#fdba74;cursor:pointer;letter-spacing:0.3px;}
+#h-hand-btn{position:absolute;top:10px;left:10px;z-index:1000;display:flex;align-items:center;gap:5px;padding:7px 11px;border-radius:10px;background:#1a1a22;border:1px solid #3a3a44;font-family:'Space Mono',monospace;font-size:11px;color:#fdba74;cursor:pointer;letter-spacing:0.3px;}
 #h-curse-banner{display:none;position:absolute;bottom:8px;left:8px;right:8px;z-index:200;background:rgba(42,21,5,0.92);border:1px solid #f97316;border-radius:10px;padding:8px 12px;font-size:12px;color:#fdba74;backdrop-filter:blur(4px);}
 #h-drawer{position:absolute;top:0;left:0;bottom:0;z-index:300;width:155px;background:#101016;border-right:1px solid #3a3a44;display:flex;flex-direction:column;transform:translateX(-100%);transition:transform 0.22s ease;}
 #h-drawer.open{transform:translateX(0);}
@@ -165,7 +165,7 @@ body{background:var(--ink);color:var(--txt);font-family:'DM Sans',sans-serif;ove
 #h-prize-area{flex-shrink:0;padding:0 14px calc(env(safe-area-inset-bottom) + 8px);border-top:1px solid rgba(255,255,255,0.05);}
 .h-sect-lbl{font-size:10px;color:var(--muted);padding:7px 2px 6px;letter-spacing:0.3px;}
 #h-prize-pills{display:flex;gap:8px;overflow-x:auto;}
-.prize-pill{padding:7px 13px;border-radius:999px;border:1px solid;background:rgba(26,26,34,0.9);font-size:12px;font-family:'Space Mono',monospace;cursor:pointer;white-space:nowrap;flex-shrink:0;}
+.prize-pill{padding:7px 13px;border-radius:999px;border:1px solid;background:rgba(26,26,34,0.9);font-size:12px;font-family:'Space Mono',monospace;cursor:pointer;white-space:nowrap;flex-shrink:0;touch-action:manipulation;}
 .prize-pill:active{opacity:0.7;}
 #keep-popup-backdrop,#play-popup-backdrop{position:fixed;inset:0;z-index:900;background:rgba(5,5,8,0.78);align-items:center;justify-content:center;padding:20px;}
 #play-popup{background:#1a1a22;border-radius:14px;padding:20px;width:100%;max-width:340px;position:relative;}
@@ -242,6 +242,9 @@ body{background:var(--ink);color:var(--txt);font-family:'DM Sans',sans-serif;ove
 .qb{padding:13px 15px 16px;overflow-y:auto;-webkit-overflow-scrolling:touch;}
 #q-panel.veto-active .tabs,#q-panel.veto-active .qb{display:none!important;}
 #q-panel.static-wait .tabs,#q-panel.static-wait .qb{display:none!important;}
+.ask-row{display:none;}
+#q-panel.online-seeker .arow{display:none!important;}
+#q-panel.online-seeker .ask-row{display:flex!important;}
 .qt{font-size:14px;color:var(--sub);line-height:1.5;margin-bottom:11px;}
 .qt em{font-style:normal;color:var(--go);font-weight:600;}
 .irow{display:flex;gap:7px;margin-bottom:9px;flex-wrap:wrap;}
@@ -471,6 +474,7 @@ body{background:var(--ink);color:var(--txt);font-family:'DM Sans',sans-serif;ove
         </select>
       </div></div>
       <div class="arow"><button class="btn btn-g" onclick="doRadar(true)">Yes — Inside</button><button class="btn btn-r" onclick="doRadar(false)">No — Outside</button></div>
+      <div class="ask-row"><button class="btn btn-g" onclick="doRadar(true)">Ask</button></div>
     </div>
     <div class="qb" id="q-match" style="display:none">
       <div class="qt">"Is your nearest <em>___</em> the same as mine?"</div>
@@ -484,6 +488,7 @@ body{background:var(--ink);color:var(--txt);font-family:'DM Sans',sans-serif;ove
       </div></div>
       <div id="match-info"></div>
       <div class="arow"><button class="btn btn-g" onclick="doMatch(true)">Yes — Same</button><button class="btn btn-r" onclick="doMatch(false)">No — Different</button></div>
+      <div class="ask-row"><button class="btn btn-g" onclick="doMatch(true)">Ask</button></div>
     </div>
     <div class="qb" id="q-measure" style="display:none">
       <div class="qt">"Compared to me, are you <em>closer to</em> or <em>further from</em> <em>___</em>?"</div>
@@ -500,6 +505,7 @@ body{background:var(--ink);color:var(--txt);font-family:'DM Sans',sans-serif;ove
         </select>
       </div></div>
       <div class="arow"><button class="btn btn-g" onclick="doMeasure('closer')">Closer</button><button class="btn btn-r" onclick="doMeasure('further')">Further</button></div>
+      <div class="ask-row"><button class="btn btn-g" onclick="doMeasure('closer')">Ask</button></div>
     </div>
     <div class="qb" id="q-thermo" style="display:none">
       <div class="qt">"I traveled from <em>Point A</em> to <em>Point B</em>. Am I <em>hotter</em> or <em>colder</em>?"</div>
@@ -509,6 +515,7 @@ body{background:var(--ink);color:var(--txt);font-family:'DM Sans',sans-serif;ove
       </div>
       <div id="thermo-info"></div>
       <div class="arow"><button class="btn btn-hot" id="btn-hot" onclick="doThermo('hotter')" disabled>🔥 Hotter</button><button class="btn btn-cold" id="btn-cold" onclick="doThermo('colder')" disabled>🧊 Colder</button></div>
+      <div class="ask-row"><button class="btn btn-g" onclick="doThermo('hotter')">Ask</button></div>
     </div>
     <div class="qb" id="q-tent" style="display:none">
       <div class="qt">"Of all the <em>___</em> within 1 mile of me, which are you closest to?"</div>
@@ -1272,6 +1279,7 @@ function backToRole(){
   lastSeenTs=null;lastSeekerPingPos=null;
   staticActive=false;prizePicks=1;
   if(seekerStaticInterval){clearInterval(seekerStaticInterval);seekerStaticInterval=null;}
+  document.getElementById('q-panel').classList.remove('online-seeker');
   hiderStartTime=null;hiderBonusSeconds=0;hiderHand=[];hiderSelfMarker=null;
   // Reset hider screen to pre-ready state for next session
   document.getElementById('h-ready-wrap').style.display='block';
@@ -1765,6 +1773,7 @@ function launchGame(){
   const sendSeekerPing=async()=>{if(!gameId||!myPos) return;await sbClient.from('game_events').insert({game_id:gameId,event_type:'seeker_ping',payload:{lat:myPos.lat,lng:myPos.lng}});};
   sendSeekerPing();
   seekerPingInterval=setInterval(sendSeekerPing,5*60*1000);
+  document.getElementById('q-panel').classList.add('online-seeker');
   setTimeout(()=>{map.invalidateSize();renderFog();updateMatchInfo();updateTentPlaces();},100);
 }
 function startTimer(){
@@ -1786,6 +1795,7 @@ function exitGame(){
   staticActive=false;
   document.getElementById('seeker-static-countdown').style.display='none';
   document.getElementById('q-panel').classList.remove('static-wait');
+  document.getElementById('q-panel').classList.remove('online-seeker');
   // Unsubscribe Supabase channel
   if(sbChannel){sbChannel.unsubscribe();sbChannel=null;}
   // Mark game ended in Supabase
@@ -2330,19 +2340,20 @@ function keepCard(){
 
 function handleGameEvent(payload){
   const evt=payload.new;
+  const evtData=typeof evt.payload==='string'?JSON.parse(evt.payload):(evt.payload||{});
   if(evt.event_type==='question'&&myRole==='hider'){
-    showHiderIncomingQuestion(evt.payload);
+    showHiderIncomingQuestion(evtData);
   } else if(evt.event_type==='answer'&&myRole==='seeker'){
     if(!pendingQuestion) return;
     const q=pendingQuestion;
     pendingQuestion=null;
     setSeekerQuestionPending(false);
     switch(q.type){
-      case 'radar':     processRadarAnswer(q.params,evt.payload.answer);    break;
-      case 'match':     processMatchAnswer(q.params,evt.payload.answer);    break;
-      case 'measure':   processMeasureAnswer(q.params,evt.payload.answer);  break;
-      case 'thermo':    processThermoAnswer(q.params,evt.payload.answer);   break;
-      case 'tentacles': processTentaclesAnswer(q.params,evt.payload.answer);break;
+      case 'radar':     processRadarAnswer(q.params,evtData.answer);    break;
+      case 'match':     processMatchAnswer(q.params,evtData.answer);    break;
+      case 'measure':   processMeasureAnswer(q.params,evtData.answer);  break;
+      case 'thermo':    processThermoAnswer(q.params,evtData.answer);   break;
+      case 'tentacles': processTentaclesAnswer(q.params,evtData.answer);break;
     }
   } else if(evt.event_type==='veto'&&myRole==='seeker'){
     vetoedQuestion=pendingQuestion;
@@ -2350,11 +2361,11 @@ function handleGameEvent(payload){
     showSeekerVetoNotification();
   } else if(evt.event_type==='veto_response'&&myRole==='hider'){
     document.getElementById('h-q-waiting').textContent='Waiting for next question…';
-    if(evt.payload.action==='re-ask') prizePicks=2;
+    if(evtData.action==='re-ask') prizePicks=2;
   } else if(evt.event_type==='seeker_ping'&&myRole==='hider'){
-    handleSeekerPing(evt.payload.lat,evt.payload.lng);
+    handleSeekerPing(evtData.lat,evtData.lng);
   } else if(evt.event_type==='static_delay'&&myRole==='seeker'){
-    startSeekerStaticCountdown(evt.payload.answer,evt.payload.delay_seconds||180);
+    startSeekerStaticCountdown(evtData.answer,evtData.delay_seconds||180);
   }
 }
 
@@ -2737,6 +2748,7 @@ async function rejoinAsSeeker(code){
   const restored=await restoreGameState(code);
   if(restored) toast('Game restored ✓','go');
   subscribeToGame();
+  document.getElementById('q-panel').classList.add('online-seeker');
   setTimeout(()=>{map.invalidateSize();renderFog();updateMatchInfo();updateTentPlaces();},100);
   startGPS('seeker');
   if(timerInterval) clearInterval(timerInterval);
