@@ -152,7 +152,7 @@ body{background:var(--ink);color:var(--txt);font-family:'DM Sans',sans-serif;ove
 .h-stat-val{font-family:'Space Mono',monospace;font-size:18px;font-weight:700;color:#e8e8ee;line-height:1.1;}
 #h-map-wrap{position:relative;flex:1;min-height:0;overflow:hidden;}
 #hider-map{position:absolute;inset:0;}
-#h-hand-btn{position:absolute;top:10px;left:10px;z-index:1000;display:flex;align-items:center;gap:5px;padding:7px 11px;border-radius:10px;background:#1a1a22;border:1px solid #3a3a44;font-family:'Space Mono',monospace;font-size:11px;color:#fdba74;cursor:pointer;letter-spacing:0.3px;}
+#h-hand-btn{position:absolute;top:10px;left:10px;z-index:1100;display:flex;align-items:center;gap:5px;padding:7px 11px;border-radius:10px;background:#1a1a22;border:1px solid #3a3a44;font-family:'Space Mono',monospace;font-size:11px;color:#fdba74;cursor:pointer;letter-spacing:0.3px;}
 #h-curse-banner{display:none;position:absolute;bottom:8px;left:8px;right:8px;z-index:200;background:rgba(42,21,5,0.92);border:1px solid #f97316;border-radius:10px;padding:8px 12px;font-size:12px;color:#fdba74;backdrop-filter:blur(4px);}
 #h-drawer{position:absolute;top:0;left:0;bottom:0;z-index:300;width:155px;background:#101016;border-right:1px solid #3a3a44;display:flex;flex-direction:column;transform:translateX(-100%);transition:transform 0.22s ease;}
 #h-drawer.open{transform:translateX(0);}
@@ -242,6 +242,7 @@ body{background:var(--ink);color:var(--txt);font-family:'DM Sans',sans-serif;ove
 .qb{padding:13px 15px 16px;overflow-y:auto;-webkit-overflow-scrolling:touch;}
 #q-panel.veto-active .tabs,#q-panel.veto-active .qb{display:none!important;}
 #q-panel.static-wait .tabs,#q-panel.static-wait .qb{display:none!important;}
+#q-panel.asking .tabs,#q-panel.asking .qb{display:none!important;}
 .ask-row{display:none;}
 #q-panel.online-seeker .arow{display:none!important;}
 #q-panel.online-seeker .ask-row{display:flex!important;}
@@ -451,6 +452,10 @@ body{background:var(--ink);color:var(--txt);font-family:'DM Sans',sans-serif;ove
         <button class="btn btn-out" onclick="seekerReaskSame()" style="flex:1;font-size:12px;">Ask same question</button>
         <button class="btn btn-out" onclick="seekerAskDifferent()" style="flex:1;font-size:12px;">Ask a different question</button>
       </div>
+    </div>
+    <div id="seeker-asking" style="display:none;padding:16px;text-align:center;">
+      <div style="font-size:10px;color:#8a8a96;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Question sent</div>
+      <div style="font-size:15px;color:#e8e8ee;font-weight:500;">Waiting for answer…</div>
     </div>
     <div id="seeker-static-countdown" style="display:none;padding:16px;text-align:center;">
       <div style="font-size:10px;color:#8a8a96;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">〰️ Static active</div>
@@ -2209,7 +2214,16 @@ async function insertQuestionEvent(type,text,params){
 
 function setSeekerQuestionPending(pending){
   document.querySelectorAll('.arow button').forEach(b=>b.disabled=pending);
-  if(!pending) refreshThermoUI();
+  const qp=document.getElementById('q-panel');
+  const askingEl=document.getElementById('seeker-asking');
+  if(pending){
+    qp.classList.add('asking');
+    askingEl.style.display='';
+  } else {
+    qp.classList.remove('asking');
+    askingEl.style.display='none';
+    refreshThermoUI();
+  }
 }
 
 function showHiderIncomingQuestion(q){
@@ -2371,6 +2385,8 @@ function handleGameEvent(payload){
 
 function startSeekerStaticCountdown(answer,delaySecs){
   if(seekerStaticInterval){clearInterval(seekerStaticInterval);seekerStaticInterval=null;}
+  document.getElementById('seeker-asking').style.display='none';
+  document.getElementById('q-panel').classList.remove('asking');
   const cdEl=document.getElementById('seeker-static-countdown');
   const timerEl=document.getElementById('seeker-static-timer');
   cdEl.style.display='';
@@ -2444,6 +2460,8 @@ async function hiderVeto(q){
 }
 
 function showSeekerVetoNotification(){
+  document.getElementById('seeker-asking').style.display='none';
+  document.getElementById('q-panel').classList.remove('asking');
   document.getElementById('seeker-veto-notify').style.display='';
   document.getElementById('q-panel').classList.add('veto-active');
 }
