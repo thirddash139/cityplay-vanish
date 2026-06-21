@@ -1269,6 +1269,61 @@ let seekerHiderMarker=null,lastSeenTs=null,lastSeenInterval=null;
 let lastSeekerPingPos=null,seekerPingInterval=null;
 const deviceId=(()=>{let id=localStorage.getItem('cvDeviceId');if(!id){id=crypto.randomUUID();localStorage.setItem('cvDeviceId',id);}return id;})();
 
+function resetGameState(){
+  // Clear all intervals / timers
+  if(seekerDelayInterval){clearInterval(seekerDelayInterval);seekerDelayInterval=null;}
+  if(seekerCurseInterval){clearInterval(seekerCurseInterval);seekerCurseInterval=null;}
+  if(detourPingInterval){clearInterval(detourPingInterval);detourPingInterval=null;}
+  if(lieReversalTimer){clearTimeout(lieReversalTimer);lieReversalTimer=null;}
+  if(hiderCurseInterval){clearInterval(hiderCurseInterval);hiderCurseInterval=null;}
+  if(seekerPingInterval){clearInterval(seekerPingInterval);seekerPingInterval=null;}
+  if(timerInterval){clearInterval(timerInterval);timerInterval=null;}
+  if(hiderTimerInterval){clearInterval(hiderTimerInterval);hiderTimerInterval=null;}
+  if(lastSeenInterval){clearInterval(lastSeenInterval);lastSeenInterval=null;}
+  // Unsubscribe channels
+  if(sbChannel){sbChannel.unsubscribe();sbChannel=null;}
+  if(fbUnsubscribe){fbUnsubscribe();fbUnsubscribe=null;}
+  // Question / curse state
+  pendingQuestion=null;
+  vetoedQuestion=null;
+  delayActive=false;
+  detourActive=false;detourOrigin=null;detourDirection=null;
+  seekerCursed=false;
+  hiderActiveCurse=false;
+  // Hand / card state
+  hiderHand=[];
+  prizePicks=1;
+  _keepCard=null;_keepDiscardIdx=null;_keepPillIdx=null;
+  _playCardRef=null;_playCardIdx=null;
+  // Lie card state
+  lieReversalTimer=null;
+  _liePlayed=false;_currentHiderQ=null;_currentQTruth=null;
+  // Seeker tracking
+  sendSeekerPingFn=null;
+  seekerHiderMarker=null;lastSeenTs=null;lastSeekerPingPos=null;
+  // Gameplay data
+  qCount=0;
+  eliminations=[];elimShapes=[];elimRecords=[];refLayers=[];
+  logEntries=[];gameStartTime=null;
+  // Hider session
+  hiderStartTime=null;hiderBonusSeconds=0;hiderSelfMarker=null;
+  // UI — question pending state
+  setSeekerQuestionPending(false);
+  // UI — curse / delay overlays
+  hideSeekerCurse();
+  document.getElementById('seeker-delay-countdown').style.display='none';
+  document.getElementById('q-panel').classList.remove('delay-wait');
+  document.getElementById('h-curse-banner').style.display='none';
+  // UI — log / counters
+  document.getElementById('log-body').innerHTML='';
+  document.getElementById('log-badge').textContent='0';
+  document.getElementById('s-q').textContent='0';
+  document.getElementById('s-z').textContent='100%';
+  document.getElementById('s-t').textContent='0:00';
+  // Map layers
+  if(map){zoneGroup&&zoneGroup.clearLayers();fogGroup&&fogGroup.clearLayers();}
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // ROLE / NAVIGATION
 // ═══════════════════════════════════════════════════════════════════
@@ -1293,6 +1348,7 @@ async function launchAsSeeker(){
 }
 
 async function launchAsHiderFromSetup(){
+  resetGameState();
   myRole='hider';
   const gId=await gameIdPromise;
   if(gId){
@@ -1304,20 +1360,9 @@ async function launchAsHiderFromSetup(){
 
 function backToRole(){
   stopGPS();
-  if(sbChannel){sbChannel.unsubscribe();sbChannel=null;}
-  if(hiderTimerInterval){clearInterval(hiderTimerInterval);hiderTimerInterval=null;}
-  if(lastSeenInterval){clearInterval(lastSeenInterval);lastSeenInterval=null;}
+  resetGameState();
   if(seekerHiderMarker){seekerHiderMarker.remove();seekerHiderMarker=null;}
-  lastSeenTs=null;lastSeekerPingPos=null;
-  delayActive=false;prizePicks=1;hiderActiveCurse=false;
-  if(seekerDelayInterval){clearInterval(seekerDelayInterval);seekerDelayInterval=null;}
-  detourActive=false;detourOrigin=null;detourDirection=null;
-  if(detourPingInterval){clearInterval(detourPingInterval);detourPingInterval=null;}
-  if(lieReversalTimer){clearTimeout(lieReversalTimer);lieReversalTimer=null;}
-  _liePlayed=false;_currentHiderQ=null;_currentQTruth=null;
-  hideSeekerCurse();
   document.getElementById('q-panel').classList.remove('online-seeker');
-  hiderStartTime=null;hiderBonusSeconds=0;hiderHand=[];hiderSelfMarker=null;
   // Reset hider screen to pre-ready state for next session
   document.getElementById('h-ready-wrap').style.display='block';
   document.getElementById('h-q-area').style.display='none';
@@ -1414,6 +1459,7 @@ function startHiderMap(){
 }
 
 async function loadGameAndShowHider(code){
+  resetGameState();
   const {data,error}=await sbClient.from('games').select('id,neighbourhood').eq('code',code).single();
   if(error||!data){toast('Game not found','err');return;}
   gameId=data.id;
@@ -1856,6 +1902,7 @@ function initMap(){
 // ═══════════════════════════════════════════════════════════════════
 async function launchGame(){
   if(!selectedIds.length) return;
+  resetGameState();
   // Persist final neighbourhood selection now that gameId is guaranteed available
   const gId=await gameIdPromise;
   if(gId) await sbClient.from('games').update({neighbourhood:JSON.stringify(selectedIds)}).eq('id',gId);
@@ -1911,32 +1958,13 @@ function startTimer(){
 function exitGame(){
   if(!confirm('End the game?')) return;
   stopGPS();
-  if(timerInterval) clearInterval(timerInterval);
-  // Unsubscribe Firebase listener (seeker position on hider map)
-  if(fbUnsubscribe){fbUnsubscribe();fbUnsubscribe=null;}
-  if(lastSeenInterval){clearInterval(lastSeenInterval);lastSeenInterval=null;}
-  if(seekerPingInterval){clearInterval(seekerPingInterval);seekerPingInterval=null;}
-  if(seekerDelayInterval){clearInterval(seekerDelayInterval);seekerDelayInterval=null;}
-  delayActive=false;
-  detourActive=false;detourOrigin=null;detourDirection=null;
-  if(detourPingInterval){clearInterval(detourPingInterval);detourPingInterval=null;}
-  if(lieReversalTimer){clearTimeout(lieReversalTimer);lieReversalTimer=null;}
-  _liePlayed=false;_currentHiderQ=null;_currentQTruth=null;
-  hiderActiveCurse=false;
-  hideSeekerCurse();
-  document.getElementById('seeker-delay-countdown').style.display='none';
-  document.getElementById('q-panel').classList.remove('delay-wait');
-  document.getElementById('q-panel').classList.remove('online-seeker');
-  // Unsubscribe Supabase channel
-  if(sbChannel){sbChannel.unsubscribe();sbChannel=null;}
-  // Mark game ended in Supabase
+  // Mark game ended in Supabase and clear Firebase node before resetting gameId/gameCode
   if(gameId){sbClient.from('games').update({status:'ended'}).eq('id',gameId);gameId=null;}
-  // Clear Firebase game node (state persistence cleanup)
   if(gameCode && window._fbSet) window._fbSet(`games/${gameCode}`,null);
-  if(hiderTimerInterval){clearInterval(hiderTimerInterval);hiderTimerInterval=null;}
-  hiderStartTime=null;hiderBonusSeconds=0;hiderHand=[];hiderSelfMarker=null;
-  qCount=0;eliminations=[];refLayers=[];elimShapes=[];elimRecords=[];logEntries=[];selectedIds=[];activePolys=[];
-  if(map){zoneGroup.clearLayers();fogGroup.clearLayers();}
+  gameCode=null;gameIdPromise=null;
+  resetGameState();
+  selectedIds=[];activePolys=[];
+  document.getElementById('q-panel').classList.remove('online-seeker');
   document.getElementById('top-bar').style.display='none';
   document.getElementById('bottom-bar').style.display='none';
   document.getElementById('hider-game-bar').style.display='none';
@@ -1944,9 +1972,6 @@ function exitGame(){
   document.getElementById('game-stats').style.display='flex';
   document.getElementById('setup-screen').style.display='flex';
   refreshGrid();refreshSummary();onNeighbourhoodsReady();
-  document.getElementById('s-q').textContent='0';
-  document.getElementById('s-z').textContent='100%';
-  document.getElementById('s-t').textContent='0:00';
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -2955,6 +2980,7 @@ function checkUrlJoin(){
 }
 
 async function rejoinAsSeeker(code){
+  resetGameState();
   myRole='seeker';
   gameCode=code;
   const {data,error}=await sbClient.from('games').select('id,neighbourhood').eq('code',code).single();
