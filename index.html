@@ -1296,7 +1296,7 @@ async function launchAsHiderFromSetup(){
   myRole='hider';
   const gId=await gameIdPromise;
   if(gId){
-    await sbClient.from('games').update({hider_id:deviceId}).eq('id',gId);
+    await sbClient.from('games').update({hider_id:deviceId,neighbourhood:JSON.stringify(selectedIds)}).eq('id',gId);
     subscribeToGame();
   }
   startHiderMap();
@@ -1854,8 +1854,11 @@ function initMap(){
 // ═══════════════════════════════════════════════════════════════════
 // LAUNCH (seeker)
 // ═══════════════════════════════════════════════════════════════════
-function launchGame(){
+async function launchGame(){
   if(!selectedIds.length) return;
+  // Persist final neighbourhood selection now that gameId is guaranteed available
+  const gId=await gameIdPromise;
+  if(gId) await sbClient.from('games').update({neighbourhood:JSON.stringify(selectedIds)}).eq('id',gId);
   // Start GPS for seeker
   startGPS('seeker');
   if(!map) initMap();
