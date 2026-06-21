@@ -247,6 +247,7 @@ body{background:var(--ink);color:var(--txt);font-family:'DM Sans',sans-serif;ove
 #q-panel.veto-active .tabs,#q-panel.veto-active .qb{display:none!important;}
 #q-panel.delay-wait .tabs,#q-panel.delay-wait .qb{display:none!important;}
 #q-panel.asking .tabs,#q-panel.asking .qb{display:none!important;}
+#q-panel.answer-reveal .tabs,#q-panel.answer-reveal .qb{display:none!important;}
 .ask-row{display:none;}
 #q-panel.online-seeker .arow{display:none!important;}
 #q-panel.online-seeker .ask-row{display:flex!important;}
@@ -459,7 +460,14 @@ body{background:var(--ink);color:var(--txt);font-family:'DM Sans',sans-serif;ove
     </div>
     <div id="seeker-asking" style="display:none;padding:16px;text-align:center;">
       <div style="font-size:10px;color:#8a8a96;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Question sent</div>
-      <div style="font-size:15px;color:#e8e8ee;font-weight:500;">Waiting for answer…</div>
+      <div id="seeker-asking-status" style="font-size:15px;color:#e8e8ee;font-weight:500;">Waiting for answer…</div>
+      <button id="seeker-resync-btn" onclick="resyncAnswer()" style="display:none;margin-top:12px;background:rgba(249,115,22,0.12);border:1px solid rgba(249,115,22,0.4);color:#f97316;font-family:'Space Mono',monospace;font-size:12px;padding:8px 18px;border-radius:8px;cursor:pointer;touch-action:manipulation;">Still waiting — tap to re-sync</button>
+    </div>
+    <div id="seeker-answer-confirm" style="display:none;padding:16px;text-align:center;">
+      <div id="seeker-answer-label" style="font-size:10px;color:#8a8a96;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Hider answered</div>
+      <div id="seeker-answer-text" style="font-size:26px;color:#00e87a;font-weight:700;font-family:'Space Mono',monospace;margin-bottom:8px;"></div>
+      <div id="seeker-answer-question" style="font-size:12px;color:#8a8a96;margin-bottom:14px;"></div>
+      <button onclick="dismissAnswerConfirm()" style="background:#0d2d1a;border:1px solid #00e87a;color:#00e87a;font-family:'Space Mono',monospace;font-size:13px;font-weight:500;padding:10px 28px;border-radius:8px;cursor:pointer;touch-action:manipulation;">Got it</button>
     </div>
     <div id="seeker-delay-countdown" style="display:none;padding:16px;text-align:center;">
       <div style="font-size:10px;color:#8a8a96;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">〰️ Delay active</div>
@@ -1267,6 +1275,8 @@ let _currentHiderQ=null,_currentQTruth=null,_liePlayed=false;
 let hiderActiveCurse=false;
 let seekerHiderMarker=null,lastSeenTs=null,lastSeenInterval=null;
 let lastSeekerPingPos=null,seekerPingInterval=null;
+const processedEventIds=new Set();
+let pendingAnswerAck=null,answerWaitTimeout=null;
 const deviceId=(()=>{let id=localStorage.getItem('cvDeviceId');if(!id){id=crypto.randomUUID();localStorage.setItem('cvDeviceId',id);}return id;})();
 
 function resetGameState(){
@@ -1322,6 +1332,12 @@ function resetGameState(){
   document.getElementById('s-t').textContent='0:00';
   // Map layers
   if(map){zoneGroup&&zoneGroup.clearLayers();fogGroup&&fogGroup.clearLayers();}
+  // Answer confirmation + dedup
+  processedEventIds.clear();
+  pendingAnswerAck=null;
+  if(answerWaitTimeout){clearTimeout(answerWaitTimeout);answerWaitTimeout=null;}
+  document.getElementById('seeker-answer-confirm').style.display='none';
+  document.getElementById('q-panel').classList.remove('answer-reveal');
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -2345,6 +2361,7 @@ function doTentacles(){
 
 function subscribeToGame(){
   if(!gameId||sbChannel) return;
+  console.log('[CityPlay] subscribeToGame: subscribing to game-'+gameId);
   sbChannel=sbClient.channel(`game-${gameId}`)
     .on('postgres_changes',{event:'UPDATE',schema:'public',table:'games',filter:`id=eq.${gameId}`},payload=>{
       if(payload.new.status==='active' && myRole==='seeker'){
@@ -2353,7 +2370,35 @@ function subscribeToGame(){
       }
     })
     .on('postgres_changes',{event:'INSERT',schema:'public',table:'game_events',filter:`game_id=eq.${gameId}`},handleGameEvent)
-    .subscribe();
+    .subscribe(status=>console.log('[CityPlay] channel status:',status));
+}
+
+function resyncChannel(){
+  console.log('[CityPlay] resyncChannel: resubscribing');
+  if(sbChannel){sbChannel.unsubscribe();sbChannel=null;}
+  subscribeToGame();
+}
+
+async function resyncAnswer(){
+  if(!gameId||!pendingQuestion) return;
+  console.log('[CityPlay] resyncAnswer: resubscribing channel and querying for missed answer');
+  resyncChannel();
+  const{data}=await sbClient.from('game_events')
+    .select('*')
+    .eq('game_id',gameId)
+    .in('event_type',['answer','static_delay'])
+    .order('created_at',{ascending:false})
+    .limit(5);
+  if(data&&data.length){
+    for(const row of data){
+      if(!processedEventIds.has(row.id)){
+        console.log('[CityPlay] resyncAnswer: replaying missed event id='+row.id+' type='+row.event_type);
+        handleGameEvent({new:row});
+        return;
+      }
+    }
+  }
+  console.log('[CityPlay] resyncAnswer: no new answer events found');
 }
 
 async function insertQuestionEvent(type,text,params){
@@ -2371,7 +2416,18 @@ function setSeekerQuestionPending(pending){
   if(pending){
     qp.classList.add('asking');
     askingEl.style.display='';
+    document.getElementById('seeker-asking-status').textContent='Waiting for answer…';
+    document.getElementById('seeker-resync-btn').style.display='none';
+    if(answerWaitTimeout) clearTimeout(answerWaitTimeout);
+    answerWaitTimeout=setTimeout(()=>{
+      if(!pendingQuestion) return;
+      console.log('[CityPlay] answer wait timeout — showing resync button');
+      document.getElementById('seeker-asking-status').textContent='Still waiting…';
+      document.getElementById('seeker-resync-btn').style.display='';
+    },25000);
   } else {
+    if(answerWaitTimeout){clearTimeout(answerWaitTimeout);answerWaitTimeout=null;}
+    document.getElementById('seeker-resync-btn').style.display='none';
     qp.classList.remove('asking');
     askingEl.style.display='none';
     refreshThermoUI();
@@ -2556,21 +2612,18 @@ function keepCard(){
 
 function handleGameEvent(payload){
   const evt=payload.new;
+  if(evt.id&&processedEventIds.has(evt.id)) return;
+  if(evt.id) processedEventIds.add(evt.id);
+  console.log('[CityPlay] handleGameEvent: type='+evt.event_type+' id='+evt.id+' role='+myRole);
   const evtData=typeof evt.payload==='string'?JSON.parse(evt.payload):(evt.payload||{});
   if(evt.event_type==='question'&&myRole==='hider'){
     showHiderIncomingQuestion(evtData);
   } else if(evt.event_type==='answer'&&myRole==='seeker'){
     if(!pendingQuestion) return;
+    console.log('[CityPlay] answer received for pending question type='+pendingQuestion.type);
     const q=pendingQuestion;
     pendingQuestion=null;
-    setSeekerQuestionPending(false);
-    switch(q.type){
-      case 'radar':     processRadarAnswer(q.params,evtData.answer);    break;
-      case 'match':     processMatchAnswer(q.params,evtData.answer);    break;
-      case 'measure':   processMeasureAnswer(q.params,evtData.answer);  break;
-      case 'thermo':    processThermoAnswer(q.params,evtData.answer);   break;
-      case 'tentacles': processTentaclesAnswer(q.params,evtData.answer);break;
-    }
+    deliverAnswer(q,evtData.answer);
   } else if(evt.event_type==='veto'&&myRole==='seeker'){
     vetoedQuestion=pendingQuestion;
     pendingQuestion=null;
@@ -2594,7 +2647,7 @@ function handleGameEvent(payload){
     hiderActiveCurse=false;renderHiderDrawer();
   } else if(evt.event_type==='lie_reversal'&&myRole==='seeker'){
     applyLieReversal(evtData.type,evtData.params,evtData.trueAnswer);
-    toast('📍 Hider correction received — fog updated','go');
+    showAnswerConfirmation({type:evtData.type,text:'Earlier question — true answer',params:evtData.params},evtData.trueAnswer,'lie');
   }
 }
 
@@ -2618,18 +2671,55 @@ function startSeekerDelayCountdown(answer,delaySecs){
       if(!pendingQuestion) return;
       const q=pendingQuestion;
       pendingQuestion=null;
-      setSeekerQuestionPending(false);
-      switch(q.type){
-        case 'radar':     processRadarAnswer(q.params,answer);    break;
-        case 'match':     processMatchAnswer(q.params,answer);    break;
-        case 'measure':   processMeasureAnswer(q.params,answer);  break;
-        case 'thermo':    processThermoAnswer(q.params,answer);   break;
-        case 'tentacles': processTentaclesAnswer(q.params,answer);break;
-      }
+      deliverAnswer(q,answer);
       return;
     }
     tick();
   },1000);
+}
+
+function humanAnswerText(type,answer){
+  if(type==='radar') return answer==='yes'?'YES — Inside':'NO — Outside';
+  if(type==='match') return answer==='yes'?'YES — Same':'NO — Different';
+  if(type==='measure') return answer==='closer'?'CLOSER':'FURTHER';
+  if(type==='thermo') return answer==='hotter'?'HOTTER':'COLDER';
+  return answer; // tentacles: answer is place name
+}
+
+function deliverAnswer(q,answer){
+  setSeekerQuestionPending(false);
+  switch(q.type){
+    case 'radar':     processRadarAnswer(q.params,answer);    break;
+    case 'match':     processMatchAnswer(q.params,answer);    break;
+    case 'measure':   processMeasureAnswer(q.params,answer);  break;
+    case 'thermo':    processThermoAnswer(q.params,answer);   break;
+    case 'tentacles': processTentaclesAnswer(q.params,answer);break;
+  }
+  showAnswerConfirmation(q,answer,'answer');
+}
+
+function showAnswerConfirmation(q,answer,mode){
+  const textEl=document.getElementById('seeker-answer-text');
+  if(mode==='lie'){
+    document.getElementById('seeker-answer-label').textContent='Hider correction';
+    textEl.textContent=humanAnswerText(q.type,answer);
+    textEl.style.color='#e879f9';
+    document.getElementById('seeker-answer-question').textContent='The true answer to your earlier question';
+  } else {
+    document.getElementById('seeker-answer-label').textContent='Hider answered';
+    textEl.textContent=humanAnswerText(q.type,answer);
+    textEl.style.color='#00e87a';
+    document.getElementById('seeker-answer-question').textContent=q.text||'';
+  }
+  pendingAnswerAck=mode;
+  document.getElementById('seeker-answer-confirm').style.display='';
+  document.getElementById('q-panel').classList.add('answer-reveal');
+}
+
+function dismissAnswerConfirm(){
+  document.getElementById('seeker-answer-confirm').style.display='none';
+  document.getElementById('q-panel').classList.remove('answer-reveal');
+  pendingAnswerAck=null;
 }
 
 function updateHiderSeekerUI(){
@@ -3018,6 +3108,13 @@ async function rejoinAsSeeker(code){
 window.addEventListener('DOMContentLoaded',()=>{
   buildGrid();
   refreshGrid();
+  document.addEventListener('visibilitychange',()=>{
+    if(document.visibilityState==='visible'&&gameId&&myRole==='seeker'){
+      console.log('[CityPlay] visibilitychange: page visible, resyncing');
+      if(pendingQuestion) resyncAnswer(); // resyncAnswer calls resyncChannel then queries DB
+      else resyncChannel();
+    }
+  });
   // Show setup screen by default (neighbourhood selection is always first)
   const params=new URLSearchParams(location.search);
   if(params.get('join')){
