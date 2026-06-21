@@ -1362,6 +1362,7 @@ function onNeighbourhoodsReady(){
   if(hasSelection && !gameCode){
     gameCode = generateCode();
     document.getElementById('setup-code-display').textContent = gameCode.match(/.{1,3}/g).join('  ');
+    console.log('[CityPlay] selectedIds at game create:', JSON.parse(JSON.stringify(selectedIds)));
     gameIdPromise = sbClient.from('games').insert({
       code: gameCode,
       hider_id: 'pending',
@@ -1371,6 +1372,9 @@ function onNeighbourhoodsReady(){
       gameId=data.id;
       return gameId;
     });
+  } else if(hasSelection && gameCode){
+    console.log('[CityPlay] selectedIds at neighbourhood update:', JSON.parse(JSON.stringify(selectedIds)));
+    sbClient.from('games').update({neighbourhood: JSON.stringify(selectedIds)}).eq('code', gameCode);
   } else if(!hasSelection){
     gameCode=null;
     gameId=null;
@@ -1414,6 +1418,7 @@ async function loadGameAndShowHider(code){
   if(error||!data){toast('Game not found','err');return;}
   gameId=data.id;
   selectedIds=JSON.parse(data.neighbourhood)||[];
+  console.log('[CityPlay] selectedIds at load (hider join):', JSON.parse(JSON.stringify(selectedIds)));
   gameCode=code;
   subscribeToGame();
   document.getElementById('setup-screen').style.display='none';
@@ -2953,6 +2958,7 @@ async function rejoinAsSeeker(code){
   if(error||!data){toast('Game not found','err');return;}
   gameId=data.id;
   selectedIds=JSON.parse(data.neighbourhood)||[];
+  console.log('[CityPlay] selectedIds at load (seeker rejoin):', JSON.parse(JSON.stringify(selectedIds)));
   activePolys=selectedIds.map(id=>({id,poly:POLY[id]}));
   // Hide setup, show game UI
   document.getElementById('setup-screen').style.display='none';
