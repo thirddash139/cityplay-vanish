@@ -1294,7 +1294,7 @@ let hiderActiveCurse=false;
 let seekerHiderMarker=null,lastSeenTs=null,lastSeenInterval=null;
 let lastSeekerPingPos=null,seekerPingInterval=null;
 const processedEventIds=new Set();
-let pendingAnswerAck=null,answerWaitTimeout=null;
+let pendingAnswerAck=null,answerWaitTimeout=null,seekerCatchupInterval=null;
 const deviceId=(()=>{let id=localStorage.getItem('cvDeviceId');if(!id){id=crypto.randomUUID();localStorage.setItem('cvDeviceId',id);}return id;})();
 
 function resetGameState(){
@@ -1354,6 +1354,7 @@ function resetGameState(){
   processedEventIds.clear();
   pendingAnswerAck=null;
   if(answerWaitTimeout){clearTimeout(answerWaitTimeout);answerWaitTimeout=null;}
+  if(seekerCatchupInterval){clearInterval(seekerCatchupInterval);seekerCatchupInterval=null;}
   document.getElementById('seeker-answer-confirm').style.display='none';
   document.getElementById('q-panel').classList.remove('answer-reveal');
 }
@@ -1382,6 +1383,7 @@ async function launchAsSeeker(){
 }
 
 async function launchAsHiderFromSetup(){
+  clearSession();
   resetGameState();
   myRole='hider';
   const gId=await gameIdPromise;
@@ -1412,14 +1414,20 @@ function backToRole(){
   document.getElementById('hider-screen').style.display='none';
 }
 
-function promptJoinCode(){
+async function promptJoinCode(){
   const code=prompt('Enter the game code from the seeker:');
   if(!code) return;
   const cleaned=code.toUpperCase().replace(/[^A-Z0-9]/g,'');
   if(cleaned.length<4){toast('Invalid code','err');return;}
+  console.log('[CityPlay] promptJoinCode: code='+cleaned+' deviceId='+deviceId);
+  const {data,error}=await sbClient.from('games').select('seeker_id,hider_id').eq('code',cleaned).single();
+  if(!error&&data){
+    console.log('[CityPlay] promptJoinCode: seeker_id='+data.seeker_id+' hider_id='+data.hider_id);
+    if(data.seeker_id===deviceId){rejoinAsSeeker(cleaned);return;}
+    if(data.hider_id===deviceId){rejoinAsHider(cleaned);return;}
+  }
   gameCode=cleaned;
   myRole='hider';
-  // Load game config from Firebase then show hider map
   loadGameAndShowHider(cleaned);
 }
 
@@ -1938,6 +1946,7 @@ function initMap(){
 // ═══════════════════════════════════════════════════════════════════
 async function launchGame(){
   if(!selectedIds.length) return;
+  clearSession();
   resetGameState();
   // Persist final neighbourhood selection now that gameId is guaranteed available
   const gId=await gameIdPromise;
@@ -2427,7 +2436,8 @@ async function resyncAnswer(){
 
 // ── Session persistence (reload rejoin) ──────────────────────────
 function persistSession(){
-  if(!gameCode||!gameId||!myRole) return;
+  console.log('[CityPlay] persistSession: role='+myRole+' code='+gameCode+' gameId='+gameId);
+  if(!gameCode||!gameId||!myRole){console.log('[CityPlay] persistSession: skipped (missing fields)');return;}
   localStorage.setItem('cvSession',JSON.stringify({gameCode,gameId,role:myRole}));
 }
 function clearSession(){
@@ -2491,6 +2501,7 @@ async function rejoinAsHider(code){
 
 function confirmRejoin(){
   const sess=window._pendingRejoinSession;
+  console.log('[CityPlay] confirmRejoin: '+JSON.stringify(sess));
   if(!sess) return;
   document.getElementById('rejoin-screen').style.display='none';
   if(sess.role==='seeker'){
@@ -2531,8 +2542,27 @@ function setSeekerQuestionPending(pending){
       document.getElementById('seeker-asking-status').textContent='Still waiting…';
       document.getElementById('seeker-resync-btn').style.display='';
     },25000);
+    if(seekerCatchupInterval) clearInterval(seekerCatchupInterval);
+    seekerCatchupInterval=setInterval(async()=>{
+      if(!pendingQuestion||!gameId){clearInterval(seekerCatchupInterval);seekerCatchupInterval=null;return;}
+      console.log('[CityPlay] catchup poll: checking for missed answer events');
+      const {data}=await sbClient.from('game_events')
+        .select('*').eq('game_id',gameId)
+        .in('event_type',['answer','static_delay'])
+        .order('created_at',{ascending:false}).limit(5);
+      if(data&&data.length){
+        for(const row of [...data].reverse()){
+          if(!processedEventIds.has(row.id)){
+            console.log('[CityPlay] catchup: replaying missed event id='+row.id+' type='+row.event_type);
+            handleGameEvent({new:row});
+            break;
+          }
+        }
+      }
+    },4000);
   } else {
     if(answerWaitTimeout){clearTimeout(answerWaitTimeout);answerWaitTimeout=null;}
+    if(seekerCatchupInterval){clearInterval(seekerCatchupInterval);seekerCatchupInterval=null;}
     document.getElementById('seeker-resync-btn').style.display='none';
     qp.classList.remove('asking');
     askingEl.style.display='none';
@@ -2608,10 +2638,10 @@ async function hiderAnswer(answer){
     hiderActiveCurse=false;
     document.getElementById('h-curse-banner').style.display='none';
     if(hiderCurseInterval){clearInterval(hiderCurseInterval);hiderCurseInterval=null;}
-    await sbClient.from('game_events').insert({game_id:gameId,event_type:'static_delay',payload:{answer,delay_seconds:180}});
+    await sbClient.from('game_events').insert({game_id:gameId,event_type:'static_delay',payload:{answer,delay_seconds:180,question:_currentHiderQ}});
     renderHiderDrawer();
   } else {
-    await sbClient.from('game_events').insert({game_id:gameId,event_type:'answer',payload:{answer}});
+    await sbClient.from('game_events').insert({game_id:gameId,event_type:'answer',payload:{answer,question:_currentHiderQ}});
   }
   if(_liePlayed&&_currentHiderQ&&_currentQTruth!==null){
     const capturedQ=_currentHiderQ,capturedTruth=_currentQTruth;
@@ -2725,9 +2755,9 @@ function handleGameEvent(payload){
   if(evt.event_type==='question'&&myRole==='hider'){
     showHiderIncomingQuestion(evtData);
   } else if(evt.event_type==='answer'&&myRole==='seeker'){
-    if(!pendingQuestion) return;
-    console.log('[CityPlay] answer received for pending question type='+pendingQuestion.type);
-    const q=pendingQuestion;
+    const q=pendingQuestion||evtData.question;
+    console.log('[CityPlay] answer received: pendingQuestion='+JSON.stringify(pendingQuestion)+' evtData.question='+JSON.stringify(evtData.question));
+    if(!q){console.warn('[CityPlay] answer event but no question context — dropping');return;}
     pendingQuestion=null;
     deliverAnswer(q,evtData.answer);
   } else if(evt.event_type==='veto'&&myRole==='seeker'){
@@ -2740,7 +2770,7 @@ function handleGameEvent(payload){
   } else if(evt.event_type==='seeker_ping'&&myRole==='hider'){
     handleSeekerPing(evtData.lat,evtData.lng);
   } else if(evt.event_type==='static_delay'&&myRole==='seeker'){
-    startSeekerDelayCountdown(evtData.answer,evtData.delay_seconds||180);
+    startSeekerDelayCountdown(evtData.answer,evtData.delay_seconds||180,evtData.question);
   } else if(evt.event_type==='curse_played'&&myRole==='seeker'){
     if(evtData.card==='Delay') return;
     if(evtData.card==='Detour'){startSeekerDetour(evtData.direction);return;}
@@ -2757,7 +2787,7 @@ function handleGameEvent(payload){
   }
 }
 
-function startSeekerDelayCountdown(answer,delaySecs){
+function startSeekerDelayCountdown(answer,delaySecs,question){
   if(seekerDelayInterval){clearInterval(seekerDelayInterval);seekerDelayInterval=null;}
   document.getElementById('seeker-asking').style.display='none';
   document.getElementById('q-panel').classList.remove('asking');
@@ -2774,8 +2804,9 @@ function startSeekerDelayCountdown(answer,delaySecs){
       clearInterval(seekerDelayInterval);seekerDelayInterval=null;
       cdEl.style.display='none';
       document.getElementById('q-panel').classList.remove('delay-wait');
-      if(!pendingQuestion) return;
-      const q=pendingQuestion;
+      const q=pendingQuestion||question;
+      console.log('[CityPlay] delay countdown done: pendingQuestion='+JSON.stringify(pendingQuestion)+' question param='+JSON.stringify(question));
+      if(!q){console.warn('[CityPlay] delay countdown done but no question context — dropping');return;}
       pendingQuestion=null;
       deliverAnswer(q,answer);
       return;
@@ -3158,21 +3189,20 @@ function toast(msg,kind=''){
 }
 
 // Auto-join from URL ?join=ABCDEF
-function checkUrlJoin(){
+async function checkUrlJoin(){
   const params=new URLSearchParams(location.search);
   const code=params.get('join');
-  const role=params.get('role'); // 'seeker' or 'hider'
-  if(code){
-    const cleaned=code.toUpperCase().replace(/[^A-Z0-9]/g,'');
-    if(role==='seeker'){
-      // Seeker rejoining — restore game state
-      rejoinAsSeeker(cleaned);
-    } else {
-      // Default: hider joining
-      myRole='hider';
-      loadGameAndShowHider(cleaned);
-    }
+  if(!code) return;
+  const cleaned=code.toUpperCase().replace(/[^A-Z0-9]/g,'');
+  console.log('[CityPlay] checkUrlJoin: code='+cleaned+' deviceId='+deviceId);
+  const {data,error}=await sbClient.from('games').select('seeker_id,hider_id').eq('code',cleaned).single();
+  if(!error&&data){
+    console.log('[CityPlay] checkUrlJoin: seeker_id='+data.seeker_id+' hider_id='+data.hider_id);
+    if(data.seeker_id===deviceId){rejoinAsSeeker(cleaned);return;}
+    if(data.hider_id===deviceId){rejoinAsHider(cleaned);return;}
   }
+  myRole='hider';
+  loadGameAndShowHider(cleaned);
 }
 
 async function rejoinAsSeeker(code){
@@ -3225,25 +3255,29 @@ window.addEventListener('DOMContentLoaded',()=>{
   });
   // Check for saved session FIRST — show rejoin prompt before URL or default logic
   const savedSession=localStorage.getItem('cvSession');
+  const urlParams=new URLSearchParams(location.search);
+  const urlJoinCode=urlParams.get('join')?(urlParams.get('join').toUpperCase().replace(/[^A-Z0-9]/g,'')):null;
   if(savedSession){
     try{
       const sess=JSON.parse(savedSession);
       if(sess.gameCode&&sess.role){
-        window._pendingRejoinSession=sess;
-        document.getElementById('rejoin-code-display').textContent=sess.gameCode.match(/.{1,3}/g).join('  ');
-        document.getElementById('rejoin-role-display').textContent=sess.role==='seeker'?'As Seeker':'As Hider';
-        document.getElementById('rejoin-screen').style.display='flex';
-        return;
+        // If URL points to a different game, discard the stale session and follow the URL
+        if(urlJoinCode&&urlJoinCode!==sess.gameCode){
+          console.log('[CityPlay] DOMContentLoaded: URL code '+urlJoinCode+' differs from session code '+sess.gameCode+' — discarding session');
+          clearSession();
+        } else {
+          window._pendingRejoinSession=sess;
+          document.getElementById('rejoin-code-display').textContent=sess.gameCode.match(/.{1,3}/g).join('  ');
+          document.getElementById('rejoin-role-display').textContent=sess.role==='seeker'?'As Seeker':'As Hider';
+          document.getElementById('rejoin-screen').style.display='flex';
+          return;
+        }
       }
     } catch(e){}
   }
-  // Show setup screen by default (neighbourhood selection is always first)
-  const params=new URLSearchParams(location.search);
-  if(params.get('join')){
-    // Hider joining via link — checkUrlJoin handles this
+  if(urlJoinCode){
     checkUrlJoin();
   } else {
-    // Default: show setup screen
     document.getElementById('role-screen').style.display='none';
     document.getElementById('setup-screen').style.display='flex';
   }
