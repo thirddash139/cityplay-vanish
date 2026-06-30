@@ -3151,6 +3151,40 @@ function replayElimination(rec){
   if(shape) elimShapes.push(shape);
 }
 
+async function replaySbEvents(gId){
+  const {data,error}=await sbClient.from('game_events')
+    .select('*').eq('game_id',gId)
+    .in('event_type',['answer','static_delay','lie_reversal'])
+    .order('created_at',{ascending:true});
+  if(error||!data||!data.length) return 0;
+  let count=0;
+  for(const row of data){
+    processedEventIds.add(row.id);
+    let evtData=row.payload;
+    if(typeof evtData==='string'){try{evtData=JSON.parse(evtData);}catch(e){continue;}}
+    if(row.event_type==='lie_reversal'){
+      if(evtData.type&&evtData.params&&evtData.trueAnswer!=null){
+        applyLieReversal(evtData.type,evtData.params,evtData.trueAnswer);
+        count++;
+      }
+    } else {
+      const q=evtData.question;
+      if(!q||!q.type||!q.params) continue;
+      switch(q.type){
+        case 'radar':     processRadarAnswer(q.params,evtData.answer);     break;
+        case 'match':     processMatchAnswer(q.params,evtData.answer);     break;
+        case 'measure':   processMeasureAnswer(q.params,evtData.answer);   break;
+        case 'thermo':    processThermoAnswer(q.params,evtData.answer);    break;
+        case 'tentacles': processTentaclesAnswer(q.params,evtData.answer); break;
+        default: continue;
+      }
+      count++;
+    }
+  }
+  console.log('[CityPlay] replaySbEvents: replayed '+count+' of '+data.length+' events for game '+gId);
+  return count;
+}
+
 async function restoreGameState(code){
   // Try to restore game state from Firebase
   return new Promise(resolve=>{
@@ -3224,9 +3258,10 @@ async function rejoinAsSeeker(code){
   resetGameState();
   myRole='seeker';
   gameCode=code;
-  const {data,error}=await sbClient.from('games').select('id,neighbourhood').eq('code',code).single();
+  const {data,error}=await sbClient.from('games').select('id,neighbourhood,started_at,status').eq('code',code).single();
   if(error||!data){toast('Game not found','err');return;}
   gameId=data.id;
+  gameStartTime=data.started_at?new Date(data.started_at).getTime():Date.now();
   selectedIds=JSON.parse(data.neighbourhood)||[];
   console.log('[CityPlay] selectedIds at load (seeker rejoin):', JSON.parse(JSON.stringify(selectedIds)));
   activePolys=selectedIds.map(id=>({id,poly:POLY[id]}));
@@ -3245,9 +3280,14 @@ async function rejoinAsSeeker(code){
   activePolys.forEach(({poly})=>{
     L.polygon(poly,{color:'#00e87a',weight:2,opacity:0.55,fillColor:'#00e87a',fillOpacity:0.05,dashArray:'8,5',interactive:false}).addTo(zoneGroup);
   });
-  // Restore game state (eliminations, log, timer) from Firebase
-  const restored=await restoreGameState(code);
-  if(restored) toast('Game restored ✓','go');
+  // Replay eliminations from Supabase events; fall back to Firebase only if none found
+  const sbCount=await replaySbEvents(gameId);
+  if(sbCount>0){
+    toast('Game restored ✓','go');
+  } else {
+    const fbRestored=await restoreGameState(code);
+    if(fbRestored) toast('Game restored ✓','go');
+  }
   subscribeToGame();
   persistSession();
   document.getElementById('q-panel').classList.add('online-seeker');
