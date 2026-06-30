@@ -1295,7 +1295,7 @@ let hiderActiveCurse=false;
 let seekerHiderMarker=null,lastSeenTs=null,lastSeenInterval=null;
 let lastSeekerPingPos=null,seekerPingInterval=null;
 const processedEventIds=new Set();
-let pendingAnswerAck=null,answerWaitTimeout=null,seekerCatchupInterval=null;
+let pendingAnswerAck=null,answerWaitTimeout=null,seekerCatchupInterval=null,hiderCatchupInterval=null;
 const deviceId=(()=>{let id=localStorage.getItem('cvDeviceId');if(!id){id=crypto.randomUUID();localStorage.setItem('cvDeviceId',id);}return id;})();
 
 function resetGameState(){
@@ -1356,6 +1356,7 @@ function resetGameState(){
   pendingAnswerAck=null;
   if(answerWaitTimeout){clearTimeout(answerWaitTimeout);answerWaitTimeout=null;}
   if(seekerCatchupInterval){clearInterval(seekerCatchupInterval);seekerCatchupInterval=null;}
+  if(hiderCatchupInterval){clearInterval(hiderCatchupInterval);hiderCatchupInterval=null;}
   document.getElementById('seeker-answer-confirm').style.display='none';
   document.getElementById('q-panel').classList.remove('answer-reveal');
 }
@@ -1597,6 +1598,7 @@ async function hiderReady(){
   hiderHand=[{name:'Lie',category:'Counter',icon:'🎭',description:"Force a false answer on the next question. Automatically corrected after 5 min — the seeker is notified."}];
   renderHiderDrawer();
   if(hiderMapObj) setTimeout(()=>hiderMapObj.invalidateSize(),50);
+  setHiderWaiting(true);
   toast('Seeker has been notified — game on!','go');
 }
 // ─── Hider timer ────────────────────────────────────────────────
@@ -2505,6 +2507,7 @@ async function rejoinAsHider(code){
     startGPS('hider');
     hiderHand=[{name:'Lie',category:'Counter',icon:'🎭',description:"Force a false answer on the next question. Automatically corrected after 5 min — the seeker is notified."}];
     renderHiderDrawer();
+    setHiderWaiting(true);
     toast('Rejoined as hider ✓','go');
   } else {
     toast('Rejoined ✓','go');
@@ -2583,7 +2586,33 @@ function setSeekerQuestionPending(pending){
   }
 }
 
+function setHiderWaiting(waiting){
+  if(waiting){
+    if(hiderCatchupInterval) clearInterval(hiderCatchupInterval);
+    hiderCatchupInterval=setInterval(async()=>{
+      if(_currentHiderQ||!gameId){clearInterval(hiderCatchupInterval);hiderCatchupInterval=null;return;}
+      console.log('[CityPlay] hider catchup poll: checking for missed question events');
+      const {data}=await sbClient.from('game_events')
+        .select('*').eq('game_id',gameId)
+        .eq('event_type','question')
+        .order('created_at',{ascending:false}).limit(5);
+      if(data&&data.length){
+        for(const row of [...data].reverse()){
+          if(!processedEventIds.has(row.id)){
+            console.log('[CityPlay] hider catchup: replaying missed question id='+row.id);
+            handleGameEvent({new:row});
+            break;
+          }
+        }
+      }
+    },4000);
+  } else {
+    if(hiderCatchupInterval){clearInterval(hiderCatchupInterval);hiderCatchupInterval=null;}
+  }
+}
+
 function showHiderIncomingQuestion(q){
+  setHiderWaiting(false);
   document.getElementById('h-q-waiting').style.display='none';
   const el=document.getElementById('h-q-incoming');
   el.style.display='';
@@ -2671,6 +2700,7 @@ async function hiderAnswer(answer){
   document.getElementById('h-q-incoming').style.display='none';
   document.getElementById('h-q-incoming').innerHTML='';
   document.getElementById('h-q-waiting').style.display='';
+  setHiderWaiting(true);
   showPrizeDraft();
 }
 

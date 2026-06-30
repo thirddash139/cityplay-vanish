@@ -108,9 +108,9 @@ The "Static" card was renamed to "Delay" in all UI and variables, BUT the Supaba
 
 ## Known open issues (as of last field test)
 
-- **Question doesn't reach the hider without manual Sync** — Realtime not surfacing `question` events to the hider automatically. Fix: extend the catch-up poll (gotcha #4) to cover `question` events for the hider.
-- **Rejoin wipes progress** — intel log, map eliminations, and timer reset on rejoin (timer stuck at 0:00). Fix: replay `game_events` and resume timer from `started_at`.
-- **Default GPS "Kennedy" location** — see gotcha #7.
+- **Question doesn't reach the hider without manual Sync** — **fixed.** `setHiderWaiting(true/false)` now runs a 4s catch-up poll for `question` events whenever the hider is idle (no `_currentHiderQ`). Poll starts on game-active, resumes after each `hiderAnswer`, stops in `showHiderIncomingQuestion` and `resetGameState`. Mirrors the seeker's `setSeekerQuestionPending` pattern exactly.
+- **Rejoin wipes progress** — **fixed.** `replaySbEvents` replays `answer`/`static_delay`/`lie_reversal` events from Supabase on seeker rejoin; `started_at` now fetched from Supabase so timer is correct without Firebase.
+- **Default GPS "Kennedy" location** — **fixed.** See gotcha #7.
 - **Lie 5-min reversal notification** — unconfirmed whether the seeker "you were lied to" notification fires; needs a full 5-min field test.
 - **Seeker map clarity** — needs clearer contrast between in-play and eliminated zones.
 - **Tentacles ASK button** — not working; other four question types work.
