@@ -1257,7 +1257,8 @@ const CENTER=[41.8900,-87.6500];
 const M2M=1609.34;
 let map,seekerMarker,hiderMarker,fogGroup,zoneGroup;
 let myRole=null;
-let myPos={lat:41.8900,lng:-87.6500};
+let myPos=null;
+console.log('[GPS] myPos initialized to null — no GPS fix yet');
 let hiderPos=null;
 let watchId=null;
 let gpsLocked=false;
@@ -1747,6 +1748,7 @@ function hideSeekerCurse(){
 }
 function startSeekerDetour(direction){
   if(seekerCurseInterval){clearInterval(seekerCurseInterval);seekerCurseInterval=null;}
+  if(!myPos){console.warn('[GPS] startSeekerDetour: no GPS fix yet, skipping detour origin');return;}
   detourActive=true;
   detourOrigin={lat:myPos.lat,lng:myPos.lng};
   detourDirection=direction;
@@ -1783,6 +1785,7 @@ function startGPS(context){
     pos=>{
       myPos={lat:pos.coords.latitude,lng:pos.coords.longitude,acc:pos.coords.accuracy};
       gpsLocked=true;
+      console.log('[GPS] watchPosition fix: lat='+myPos.lat.toFixed(6)+' lng='+myPos.lng.toFixed(6)+' acc='+Math.round(myPos.acc)+'m role='+myRole);
       if(context==='hider'){
         // Hider has no GPS status display
         // hider-start-btn removed
@@ -1933,7 +1936,8 @@ function initMap(){
   // Use role-appropriate marker for self
   const selfClass=myRole==='hider'?'hider-dot':'seeker-dot';
   const icon=L.divIcon({className:'',html:`<div class="${selfClass}"></div>`,iconSize:[18,18],iconAnchor:[9,9]});
-  seekerMarker=L.marker(myPos.lat?[myPos.lat,myPos.lng]:CENTER,{icon,zIndexOffset:1000}).addTo(map);
+  console.log('[GPS] seekerMarker placed at: '+(myPos?'lat='+myPos.lat+' lng='+myPos.lng:'CENTER (no fix yet)')+' gpsLocked='+gpsLocked);
+  seekerMarker=L.marker(myPos?[myPos.lat,myPos.lng]:CENTER,{icon,zIndexOffset:1000}).addTo(map);
   zoneGroup=L.layerGroup().addTo(map);
   fogGroup=L.layerGroup().addTo(map);
   // When user pans, stop auto-centering
@@ -2160,6 +2164,8 @@ function insideCircleGeoJSON(lat,lng,radiusMi){
 }
 
 function doRadar(yes){
+  console.log('[GPS] doRadar: myPos='+JSON.stringify(myPos)+' gpsLocked='+gpsLocked);
+  if(gameId&&myRole==='seeker'&&!gpsLocked){toast('Waiting for GPS fix…','err');return;}
   const d=+document.getElementById('r-dist').value,sL=myPos.lat,sN=myPos.lng;
   if(gameId&&myRole==='seeker'){
     insertQuestionEvent('radar',`Are you within ${d} mi of me?`,{dist:d,sLat:sL,sLng:sN});
@@ -2184,6 +2190,7 @@ function doRadar(yes){
 }
 function updateMatchInfo(){
   if(myRole!=='seeker') return;
+  if(!myPos){document.getElementById('match-info').innerHTML='<div class="warn-box">Waiting for GPS…</div>';return;}
   const type=document.getElementById('m-type').value,typeName=document.getElementById('m-type').selectedOptions[0].text;
   const nearest=nearestOf(myPos.lat,myPos.lng,type),places=zonePlaces(type);
   if(!nearest){document.getElementById('match-info').innerHTML=`<div class="warn-box">No ${typeName} in zone.</div>`;return;}
@@ -2248,6 +2255,8 @@ function halfPlaneGeoJSON(mLat,mLng,nLat,nLng,side){
 }
 
 function doMatch(same){
+  console.log('[GPS] doMatch: myPos='+JSON.stringify(myPos)+' gpsLocked='+gpsLocked);
+  if(gameId&&myRole==='seeker'&&!gpsLocked){toast('Waiting for GPS fix…','err');return;}
   const type=document.getElementById('m-type').value,typeName=document.getElementById('m-type').selectedOptions[0].text;
   const nearest=nearestOf(myPos.lat,myPos.lng,type);if(!nearest) return;
   const sn=nearest.place;
@@ -2274,6 +2283,8 @@ function doMatch(same){
 }
 
 function doMeasure(ans){
+  console.log('[GPS] doMeasure: myPos='+JSON.stringify(myPos)+' gpsLocked='+gpsLocked);
+  if(gameId&&myRole==='seeker'&&!gpsLocked){toast('Waiting for GPS fix…','err');return;}
   const v=document.getElementById('lm-sel').value,nm=document.getElementById('lm-sel').selectedOptions[0].text;
   const [la,lo]=v.split(',').map(Number),sd=distMi(myPos.lat,myPos.lng,la,lo);
   if(gameId&&myRole==='seeker'){
@@ -2364,6 +2375,7 @@ function doThermo(ans){
 }
 function updateTentPlaces(){
   if(myRole!=='seeker') return;
+  if(!myPos){document.getElementById('tent-grid').innerHTML='<div class="no-places">Waiting for GPS…</div>';return;}
   const type=document.getElementById('t-type').value,nearby=within(myPos.lat,myPos.lng,type,1.0);
   const g=document.getElementById('tent-grid');pickedTent=null;
   if(!nearby.length){g.innerHTML=`<div class="no-places">No ${type} within 1 mile in zone.</div>`;return;}
@@ -2372,6 +2384,7 @@ function updateTentPlaces(){
 }
 function pickTent(idx){const g=document.getElementById('tent-grid');pickedTent=g._places[idx];g.querySelectorAll('.tent-btn').forEach((b,i)=>b.classList.toggle('on',i===idx));}
 function doTentacles(){
+  if(gameId&&myRole==='seeker'&&!gpsLocked){toast('Waiting for GPS fix…','err');return;}
   const type=document.getElementById('t-type').value,typeName=document.getElementById('t-type').selectedOptions[0].text;
   if(gameId&&myRole==='seeker'){
     const nearby=within(myPos.lat,myPos.lng,type,1.0);
@@ -2576,7 +2589,7 @@ function showHiderIncomingQuestion(q){
   el.style.display='';
   _currentHiderQ=q;_currentQTruth=null;_liePlayed=false;
   const lieTypes=['radar','match','measure'];
-  if(lieTypes.includes(q.type)){
+  if(lieTypes.includes(q.type)&&myPos){
     if(q.type==='radar'){
       _currentQTruth=distMi(myPos.lat,myPos.lng,q.params.sLat,q.params.sLng)<=q.params.dist?'yes':'no';
     } else if(q.type==='match'){
@@ -2585,6 +2598,8 @@ function showHiderIncomingQuestion(q){
     } else if(q.type==='measure'){
       _currentQTruth=distMi(myPos.lat,myPos.lng,q.params.la,q.params.lo)<q.params.sd?'closer':'further';
     }
+  } else if(lieTypes.includes(q.type)&&!myPos){
+    console.warn('[GPS] showHiderIncomingQuestion: no GPS fix — Lie truth unavailable');
   }
   let btnsHtml;
   if(q.type==='tentacles'){

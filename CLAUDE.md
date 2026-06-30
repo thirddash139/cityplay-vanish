@@ -70,8 +70,10 @@ Each device generates a persistent `deviceId` (localStorage `cvDeviceId`). The `
 ### 6. `event_type: 'static_delay'` is a wire identifier — do NOT rename it
 The "Static" card was renamed to "Delay" in all UI and variables, BUT the Supabase event type string stayed `static_delay` to avoid invalidating in-flight events. Leave wire-protocol strings alone even when their UI label changes.
 
-### 7. There is a default-GPS-coordinate bug (the "Kennedy Expressway" bug)
-The seeker has repeatedly shown up near the Kennedy Expressway when actually elsewhere. Suspect a hardcoded seed/default coordinate that isn't being overwritten by the real `watchPosition` fix. `myPos` must come from live GPS, not a placeholder. (Open issue at time of writing — verify any GPS work against this.)
+### 7. `myPos` must be `null` until the first GPS fix — never a seed coordinate (**fixed**)
+`myPos` was initialized to `{lat:41.8900,lng:-87.6500}` (near the Kennedy Expressway). Because `watchPosition` can take 5–15s to fire (especially on CTA), any question asked before the first fix embedded the seed coordinate as `sLat`/`sLng` in the event payload, corrupting every zone elimination for that question permanently.
+
+**The fix (applied):** `myPos` is now initialized to `null`. All question-sending functions (`doRadar`, `doMatch`, `doMeasure`, `doTentacles`) check `gpsLocked` first and toast `'Waiting for GPS fix…'` if not yet locked. All display functions that read `myPos` (`updateMatchInfo`, `updateTentPlaces`) bail with a "Waiting for GPS…" message. The hider's Lie truth computation in `showHiderIncomingQuestion` is also guarded. The `initMap` marker placement uses `myPos?` (not `myPos.lat?`, which was always truthy even with the seed). **Do not re-introduce a non-null seed value for `myPos`.**
 
 ---
 
